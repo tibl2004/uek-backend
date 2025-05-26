@@ -20,7 +20,7 @@ const linksController = {
 
   createSectionWithLinks: async (req, res) => {
     try {
-     
+  
       const { subtitle, links } = req.body;
 
       if (!subtitle || !Array.isArray(links) || links.length === 0) {
