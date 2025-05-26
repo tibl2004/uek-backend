@@ -20,10 +20,7 @@ const linksController = {
 
   createSectionWithLinks: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Administratoren können Inhalte erstellen.' });
-      }
-
+     
       const { subtitle, links } = req.body;
 
       if (!subtitle || !Array.isArray(links) || links.length === 0) {

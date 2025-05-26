@@ -6,7 +6,7 @@ const linksController = require('../controller/links.controller');
 router.get('/', linksController.getAllSectionsWithLinks);
 
 // Neue Section mit Links erstellen (Admin only)
-router.post('/', linksController.authenticateToken, linksController.createSectionWithLinks);
+router.post('/', linksController.createSectionWithLinks);
 
 // Bestehende Section mit Links aktualisieren (Admin only)
 router.put('/:id', linksController.authenticateToken, linksController.updateSectionWithLinks);
