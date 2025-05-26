@@ -1,11 +1,24 @@
-const express = require('express');
+// routes/vorstandRouter.js
+const express = require("express");
 const router = express.Router();
-const vorstandController = require('../controller/vorstand.controller');
+const vorstandController = require("../controller/vorstand.controller");
 
-// Öffentliche Route:
-router.get('/public', vorstandController.getVorstand);
+// Auth Middleware
+const authenticate = vorstandController.authenticateToken;
 
-// Admin-Route zum Erstellen:
-router.post('/create', vorstandController.authenticateToken, vorstandController.createVorstand);
+// Nur Admin darf neuen Vorstand anlegen
+router.post("/", authenticate, vorstandController.createVorstand);
+
+// Alle Vorstände anzeigen (z. B. für öffentliche Liste)
+router.get("/public", authenticate, vorstandController.getVorstand);
+
+// Eigene Daten abrufen
+router.get("/me", authenticate, vorstandController.getMyProfile);
+
+// Eigene Daten aktualisieren
+router.put("/me", authenticate, vorstandController.updateMyProfile);
+
+// Nur Admin darf Passwort von einem Vorstand ändern
+router.put("/change-password", authenticate, vorstandController.changePasswordByAdmin);
 
 module.exports = router;
