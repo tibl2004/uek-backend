@@ -100,7 +100,7 @@ const vorstandController = {
       console.error('Fehler beim Erstellen des Vorstands:', error);
       res.status(500).json({ error: 'Fehler beim Erstellen des Vorstands.' });
     }
-  }
+  },
   
 
   getVorstand: async (req, res) => {
