@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const linksController = require('../controller/link.controller');
+const linksController = require('../controller/links.controller');
 
 // Alle Inhalte abrufen (kein Auth erforderlich)
 router.get('/', linksController.getAllSectionsWithLinks);
