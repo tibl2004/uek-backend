@@ -126,18 +126,24 @@ const vorstandController = {
 
   getMyProfile: async (req, res) => {
     try {
-      const { id, userType } = req.user;
+      const { id, userType, benutzername } = req.user;
   
       if (userType === 'admin') {
-        // Prüfe, ob dieser Admin auch im Vorstand ist
+        // Prüfe, ob dieser Admin auch im Vorstand ist – per BENUTZERNAME
         const [rows] = await pool.query(
           `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
-           FROM vorstand WHERE id = ?`,
-          [id]
+           FROM vorstand WHERE benutzername = ?`,
+          [benutzername]
         );
   
+        // Wenn nicht im Vorstand, gib einfache Admin-Daten oder eine Meldung zurück
         if (rows.length === 0) {
-          return res.status(404).json({ error: "Admin ist nicht im Vorstand eingetragen." });
+          return res.status(200).json({
+            id,
+            benutzername,
+            istImVorstand: false,
+            message: "Admin ist nicht im Vorstand eingetragen."
+          });
         }
   
         const v = rows[0];
@@ -152,11 +158,11 @@ const vorstandController = {
           email: v.email,
           beschreibung: v.beschreibung,
           benutzername: v.benutzername,
-          foto: v.foto || null
+          foto: v.foto || null,
+          istImVorstand: true
         });
       }
   
-      // Regulärer Vorstand
       if (userType === 'vorstand') {
         const [rows] = await pool.query(
           `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
@@ -184,13 +190,13 @@ const vorstandController = {
         });
       }
   
-      // Unbekannter Typ
       return res.status(403).json({ error: "Unbekannter Benutzertyp." });
     } catch (error) {
       console.error("Fehler beim Abrufen des Profils:", error);
       res.status(500).json({ error: "Fehler beim Abrufen des Profils." });
     }
   },
+  
   
 
   updateMyProfile: async (req, res) => {
