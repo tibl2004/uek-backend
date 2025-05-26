@@ -10,7 +10,7 @@ const authenticate = vorstandController.authenticateToken;
 router.post("/", authenticate, vorstandController.createVorstand);
 
 // Alle Vorstände anzeigen (z. B. für öffentliche Liste)
-router.get("/public", authenticate, vorstandController.getVorstand);
+router.get("/public", vorstandController.getVorstand);
 
 // Eigene Daten abrufen
 router.get("/me", authenticate, vorstandController.getMyProfile);
