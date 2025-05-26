@@ -3,7 +3,6 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 
 const vorstandController = {
-  // Authentifizierung (für private Endpunkte)
   authenticateToken: (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -20,7 +19,6 @@ const vorstandController = {
     });
   },
 
-  // Vorstand erstellen (nur Admins)
   createVorstand: async (req, res) => {
     try {
       const userType = req.user.userType;
@@ -77,12 +75,11 @@ const vorstandController = {
           hashedPassword,
           telefon,
           email,
-          fotoBase64,
+          foto, // korrekt benannte Variable
           beschreibung || null,
           rolle
         ]
       );
-      
 
       res.status(201).json({ message: "Vorstand erfolgreich erstellt." });
     } catch (error) {
@@ -91,14 +88,15 @@ const vorstandController = {
     }
   },
 
-  // Öffentliche Abfrage aller Vorstandsmitglieder
   getVorstand: async (req, res) => {
     try {
       const [rows] = await pool.query(
-        `SELECT foto, rolle, beschreibung FROM vorstand`
+        `SELECT vorname, nachname, foto, rolle, beschreibung FROM vorstand`
       );
 
       const result = rows.map(v => ({
+        vorname: v.vorname,
+        nachname: v.nachname,
         rolle: v.rolle,
         beschreibung: v.beschreibung,
         foto: v.foto ? `data:image/jpeg;base64,${v.foto}` : null
