@@ -126,37 +126,72 @@ const vorstandController = {
 
   getMyProfile: async (req, res) => {
     try {
-      const vorstandId = req.user.id;
-
-      const [rows] = await pool.query(
-        `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
-         FROM vorstand WHERE id = ?`,
-        [vorstandId]
-      );
-
-      if (rows.length === 0) {
-        return res.status(404).json({ error: "Vorstand nicht gefunden." });
+      const { id, userType } = req.user;
+  
+      if (userType === 'admin') {
+        // Prüfe, ob dieser Admin auch im Vorstand ist
+        const [rows] = await pool.query(
+          `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
+           FROM vorstand WHERE id = ?`,
+          [id]
+        );
+  
+        if (rows.length === 0) {
+          return res.status(404).json({ error: "Admin ist nicht im Vorstand eingetragen." });
+        }
+  
+        const v = rows[0];
+        return res.status(200).json({
+          id: v.id,
+          vorname: v.vorname,
+          nachname: v.nachname,
+          adresse: v.adresse,
+          plz: v.plz,
+          ort: v.ort,
+          telefon: v.telefon,
+          email: v.email,
+          beschreibung: v.beschreibung,
+          benutzername: v.benutzername,
+          foto: v.foto || null
+        });
       }
-
-      const v = rows[0];
-      res.status(200).json({
-        id: v.id,
-        vorname: v.vorname,
-        nachname: v.nachname,
-        adresse: v.adresse,
-        plz: v.plz,
-        ort: v.ort,
-        telefon: v.telefon,
-        email: v.email,
-        beschreibung: v.beschreibung,
-        benutzername: v.benutzername,
-        foto: v.foto || null // PNG Base64 mit Prefix direkt speichern/ausliefern
-      });
+  
+      // Regulärer Vorstand
+      if (userType === 'vorstand') {
+        const [rows] = await pool.query(
+          `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
+           FROM vorstand WHERE id = ?`,
+          [id]
+        );
+  
+        if (rows.length === 0) {
+          return res.status(404).json({ error: "Vorstand nicht gefunden." });
+        }
+  
+        const v = rows[0];
+        return res.status(200).json({
+          id: v.id,
+          vorname: v.vorname,
+          nachname: v.nachname,
+          adresse: v.adresse,
+          plz: v.plz,
+          ort: v.ort,
+          telefon: v.telefon,
+          email: v.email,
+          beschreibung: v.beschreibung,
+          benutzername: v.benutzername,
+          foto: v.foto || null
+        });
+      }
+  
+      // Unbekannter Typ
+      return res.status(403).json({ error: "Unbekannter Benutzertyp." });
     } catch (error) {
       console.error("Fehler beim Abrufen des Profils:", error);
       res.status(500).json({ error: "Fehler beim Abrufen des Profils." });
     }
   },
+  
 
   updateMyProfile: async (req, res) => {
     try {
