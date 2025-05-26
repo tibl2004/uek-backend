@@ -16,11 +16,13 @@ app.use(express.json());
 
 
 const linksRouter = require('./routes/links.router');
+const adminRouter = require('./routes/admin.router');
 
 
 
 
 app.use('/api/links', linksRouter);
+app.use('/api/admin', adminRouter);
 
 
 

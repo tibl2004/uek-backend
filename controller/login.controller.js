@@ -22,13 +22,14 @@ const loginController = {
     login: async (req, res) => {
         try {
             const { benutzername, passwort } = req.body;
+
             if (!benutzername || !passwort) {
                 return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich.' });
             }
 
+            // Prüfe in beiden Tabellen
             const [adminResult] = await pool.query("SELECT * FROM admins WHERE benutzername = ?", [benutzername]);
-            const [companyResult] = await pool.query("SELECT * FROM companies WHERE benutzername = ?", [benutzername]);
-            const [departmentResult] = await pool.query("SELECT * FROM departments WHERE benutzername = ?", [benutzername]);
+            const [vorstandResult] = await pool.query("SELECT * FROM vorstand WHERE benutzername = ?", [benutzername]);
 
             let user = null;
             let userType = null;
@@ -36,12 +37,9 @@ const loginController = {
             if (adminResult.length > 0) {
                 user = adminResult[0];
                 userType = 'admin';
-            } else if (companyResult.length > 0) {
-                user = companyResult[0];
-                userType = 'company';
-            } else if (departmentResult.length > 0) {
-                user = departmentResult[0];
-                userType = 'department';
+            } else if (vorstandResult.length > 0) {
+                user = vorstandResult[0];
+                userType = 'vorstand';
             } else {
                 return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
             }
@@ -51,11 +49,14 @@ const loginController = {
                 return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
             }
 
+            // Name korrekt zusammensetzen
+            const name = user.name || `${user.vorname || ''} ${user.nachname || ''}`.trim();
+
             const tokenPayload = {
                 id: user.id,
                 benutzername: user.benutzername,
                 userType,
-                name: user.name // ⬅️ WICHTIG: Name ins Token packen
+                name
             };
 
             const token = jwt.sign(tokenPayload, 'secretKey', { expiresIn: '240h' });
