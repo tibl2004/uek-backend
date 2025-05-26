@@ -47,23 +47,19 @@ const linksController = {
 
   getAllSectionsWithLinks: async (req, res) => {
     try {
-     
+      const [sections] = await pool.query('SELECT * FROM content_sections ORDER BY id');
+      const [links] = await pool.query('SELECT * FROM content_links ORDER BY id');
 
-      const sectionsSql = 'SELECT * FROM content_sections ORDER BY id';
-      const linksSql = 'SELECT * FROM content_links ORDER BY id';
-
-      const [sections] = await pool.query(sectionsSql);
-      const [links] = await pool.query(linksSql);
-
-      // Links zu Abschnitten zuordnen
       const sectionsWithLinks = sections.map(section => ({
         id: section.id,
         subtitle: section.subtitle,
-        links: links.filter(link => link.section_id === section.id).map(l => ({
-          id: l.id,
-          text: l.link_text,
-          url: l.link_url
-        }))
+        links: links
+          .filter(link => link.section_id === section.id)
+          .map(l => ({
+            id: l.id,
+            text: l.link_text,
+            url: l.link_url
+          }))
       }));
 
       res.json(sectionsWithLinks);

@@ -20,8 +20,7 @@ const linksRouter = require('./routes/links.router');
 
 
 
-app.use('/api/links', linksRouter
-);
+app.use('/api/links', linksRouter);
 
 
 
