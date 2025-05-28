@@ -28,7 +28,7 @@ app.use('/api/links', linksRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/login', loginRouter);
 app.use('/api/vorstand', vorstandRouter);
-app.use('/api/youtubelink', vorstandRouter);
+app.use('/api/youtubelink', youtubelinkRouter);
 
 
 
