@@ -18,7 +18,6 @@ const youtubelinkController = {
     });
   },
 
-  // ✅ Link erstellen – aber nur wenn keiner existiert
   createYoutubeLink: async (req, res) => {
     const { userType } = req.user;
     const { youtubelink } = req.body;
@@ -46,7 +45,6 @@ const youtubelinkController = {
     }
   },
 
-  // ✅ Link abrufen – immer nur den einen
   getYoutubeLink: async (req, res) => {
     try {
       const [results] = await pool.query('SELECT * FROM youtube_links LIMIT 1');
@@ -60,10 +58,9 @@ const youtubelinkController = {
     }
   },
 
-  // ✅ Link bearbeiten – immer nur den einen
   updateYoutubeLink: async (req, res) => {
     const { userType } = req.user;
-    const { newLink } = req.body;
+    const { newLink } = req.body; // wichtig: newLink erwartet
 
     if (userType !== 'vorstand') {
       return res.status(403).json({ error: "Nur Vorstände dürfen YouTube-Links bearbeiten." });

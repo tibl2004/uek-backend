@@ -122,6 +122,32 @@ const linksController = {
     }
   },
 
+  reorderLinks: async (req, res) => {
+    try {
+      const { linkOrder } = req.body;
+
+      if (!Array.isArray(linkOrder)) {
+        return res.status(400).json({ error: 'linkOrder muss ein Array sein.' });
+      }
+
+      // Aktualisiere Positionen für alle Links entsprechend der neuen Reihenfolge
+      const updatePromises = linkOrder.map((linkId, index) => {
+        return pool.query(
+          'UPDATE content_links SET position = ? WHERE id = ?',
+          [index + 1, linkId]
+        );
+      });
+
+      await Promise.all(updatePromises);
+
+      res.json({ message: 'Reihenfolge erfolgreich aktualisiert.' });
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der Reihenfolge:', error);
+      res.status(500).json({ error: 'Interner Serverfehler beim Aktualisieren der Reihenfolge.' });
+    }
+  },
+
+
   deleteSection: async (req, res) => {
     try {
       if (req.user.userType !== 'admin') {

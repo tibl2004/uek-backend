@@ -43,13 +43,13 @@ const vorstandController = {
         rolle
       } = req.body;
   
-      // Pflichtfeld-Check
       if (
         !geschlecht || !vorname || !nachname || !adresse || !plz || !ort ||
         !benutzername || !passwort || !telefon || !email || !rolle
       ) {
         return res.status(400).json({ error: "Alle Pflichtfelder inklusive Rolle müssen ausgefüllt sein." });
       }
+      
   
       // Falls Foto mitgeliefert wird, prüfe das Format
       let base64Foto = null;
