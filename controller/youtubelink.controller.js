@@ -2,7 +2,6 @@ const pool = require("../database/index");
 const jwt = require("jsonwebtoken");
 
 const youtubelinkController = {
-  // Authentifizierungsmiddleware
   authenticateToken: (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -19,7 +18,7 @@ const youtubelinkController = {
     });
   },
 
-  // YouTube-Link speichern
+  // ✅ Link erstellen – aber nur wenn keiner existiert
   createYoutubeLink: async (req, res) => {
     const { userType } = req.user;
     const { youtubelink } = req.body;
@@ -33,6 +32,11 @@ const youtubelinkController = {
     }
 
     try {
+      const [existing] = await pool.query('SELECT * FROM youtube_links LIMIT 1');
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Es existiert bereits ein YouTube-Link. Bitte bearbeiten statt neu erstellen." });
+      }
+
       const insertSql = 'INSERT INTO youtube_links (link) VALUES (?)';
       await pool.query(insertSql, [youtubelink]);
       res.status(201).json({ message: 'YouTube-Link erfolgreich gespeichert.' });
@@ -42,14 +46,46 @@ const youtubelinkController = {
     }
   },
 
-  // Alle YouTube-Links abrufen
-  getAllYoutubeLinks: async (req, res) => {
+  // ✅ Link abrufen – immer nur den einen
+  getYoutubeLink: async (req, res) => {
     try {
-      const [results] = await pool.query('SELECT * FROM youtube_links ORDER BY id DESC');
-      res.json(results);
+      const [results] = await pool.query('SELECT * FROM youtube_links LIMIT 1');
+      if (results.length === 0) {
+        return res.status(404).json({ error: "Kein YouTube-Link vorhanden." });
+      }
+      res.json(results[0]);
     } catch (error) {
-      console.error("Fehler beim Abrufen der Links:", error);
-      res.status(500).json({ error: "Fehler beim Abrufen der Links." });
+      console.error("Fehler beim Abrufen des Links:", error);
+      res.status(500).json({ error: "Fehler beim Abrufen des Links." });
+    }
+  },
+
+  // ✅ Link bearbeiten – immer nur den einen
+  updateYoutubeLink: async (req, res) => {
+    const { userType } = req.user;
+    const { newLink } = req.body;
+
+    if (userType !== 'vorstand') {
+      return res.status(403).json({ error: "Nur Vorstände dürfen YouTube-Links bearbeiten." });
+    }
+
+    if (!newLink || typeof newLink !== 'string') {
+      return res.status(400).json({ error: "Ein gültiger neuer Link muss angegeben werden." });
+    }
+
+    try {
+      const [existing] = await pool.query('SELECT * FROM youtube_links LIMIT 1');
+      if (existing.length === 0) {
+        return res.status(400).json({ error: "Kein YouTube-Link vorhanden. Bitte zuerst einen erstellen." });
+      }
+
+      const updateSql = 'UPDATE youtube_links SET link = ? WHERE id = ?';
+      await pool.query(updateSql, [newLink, existing[0].id]);
+
+      res.json({ message: "YouTube-Link erfolgreich aktualisiert." });
+    } catch (error) {
+      console.error("Fehler beim Aktualisieren des Links:", error);
+      res.status(500).json({ error: "Fehler beim Aktualisieren des Links." });
     }
   }
 };
