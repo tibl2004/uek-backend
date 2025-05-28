@@ -19,6 +19,9 @@ const linksController = {
   },
 
   createSectionWithLinks: async (req, res) => {
+    if (userType !== 'vorstand') {
+      return res.status(403).json({ error: "Nur Admins dürfen Passwörter ändern." });
+    }
     try {
   
       const { subtitle, links } = req.body;
