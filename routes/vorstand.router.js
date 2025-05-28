@@ -2,6 +2,11 @@
 const express = require("express");
 const router = express.Router();
 const vorstandController = require("../controller/vorstand.controller");
+const multer = require('multer');
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+
 
 // Auth Middleware
 const authenticate = vorstandController.authenticateToken;
@@ -16,8 +21,7 @@ router.get("/public", vorstandController.getVorstand);
 router.get("/me", authenticate, vorstandController.getMyProfile);
 
 // Eigene Daten aktualisieren
-router.put("/me", authenticate, vorstandController.updateMyProfile);
-
+router.put("/me", authenticate, upload.single('foto'), vorstandController.updateMyProfile);
 // Nur Admin darf Passwort von einem Vorstand ändern
 router.put("/change-password", authenticate, vorstandController.changePasswordByAdmin);
 
