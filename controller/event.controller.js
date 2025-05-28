@@ -17,42 +17,58 @@ const eventController = {
 
   createEvent: async (req, res) => {
     try {
-
       const {
         titel,
         beschreibung,
         ort,
-        von,       // Startdatum ISO-String, z.B. "2025-06-01T10:00:00Z"
-        bis,       // Enddatum ISO-String
-        alle,      // boolean ob für alle Nutzer
-        supporter  // boolean ob Supporter eingeladen sind
+        von,
+        bis,
+        alle,
+        supporter
       } = req.body;
-
+  
       if (!titel || !beschreibung || !ort || !von || !bis) {
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
-
+  
       let bildBase64 = null;
-      if (req.body.bild) {
-        if (!req.body.bild.startsWith('data:image/png;base64,')) {
-          return res.status(400).json({ error: 'Bild muss als PNG im Base64-Format mit Prefix gesendet werden.' });
-        }
-        bildBase64 = req.body.bild.replace(/^data:image\/png;base64,/, '');
+  
+      if (req.file) {
+        // Bild vom Upload in PNG umwandeln und Base64 mit Prefix erzeugen
+        const pngBuffer = await sharp(req.file.buffer)
+          .png()
+          .toBuffer();
+        bildBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+      } else if (req.body.bild && req.body.bild.startsWith('data:image/png;base64,')) {
+        // Bild ist schon PNG-Base64
+        bildBase64 = req.body.bild;
+      } else if (req.body.bild) {
+        return res.status(400).json({ error: "Bild muss hochgeladen oder als PNG-Base64 mit Prefix gesendet werden." });
       }
-
+  
       await pool.query(
         `INSERT INTO events 
          (titel, beschreibung, ort, von, bis, bild, alle, supporter) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titel, beschreibung, ort, von, bis, bildBase64, alle ? 1 : 0, supporter ? 1 : 0]
+        [
+          titel, 
+          beschreibung, 
+          ort, 
+          von, 
+          bis, 
+          bildBase64, 
+          alle ? 1 : 0, 
+          supporter ? 1 : 0
+        ]
       );
-
+  
       res.status(201).json({ message: "Event erfolgreich erstellt." });
     } catch (error) {
       console.error("Fehler beim Erstellen des Events:", error);
       res.status(500).json({ error: "Fehler beim Erstellen des Events." });
     }
   },
+  
 
   getEvents: async (req, res) => {
     try {
