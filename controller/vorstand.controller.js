@@ -26,7 +26,7 @@ const vorstandController = {
       if (req.user.userType !== 'admin') {
         return res.status(403).json({ error: 'Nur Admins dürfen einen Vorstand erstellen.' });
       }
-  
+
       const {
         geschlecht,
         vorname,
@@ -42,15 +42,15 @@ const vorstandController = {
         beschreibung,
         rolle
       } = req.body;
-  
+
       if (
         !geschlecht || !vorname || !nachname || !adresse || !plz || !ort ||
         !benutzername || !passwort || !telefon || !email || !rolle
       ) {
         return res.status(400).json({ error: "Alle Pflichtfelder inklusive Rolle müssen ausgefüllt sein." });
       }
-      
-  
+
+
       // Falls Foto mitgeliefert wird, prüfe das Format
       let base64Foto = null;
       if (foto) {
@@ -60,7 +60,7 @@ const vorstandController = {
         // Optional: Header entfernen, nur wenn du es so wie bei "unterschrift" machen willst
         base64Foto = foto.replace(/^data:image\/png;base64,/, '');
       }
-  
+
       // Benutzername darf nicht doppelt vorkommen
       const [existingUser] = await pool.query(
         'SELECT id FROM vorstand WHERE benutzername = ?',
@@ -69,10 +69,10 @@ const vorstandController = {
       if (existingUser.length > 0) {
         return res.status(409).json({ error: 'Benutzername bereits vergeben.' });
       }
-  
+
       // Passwort verschlüsseln
       const hashedPassword = await bcrypt.hash(passwort, 10);
-  
+
       // In DB speichern
       await pool.query(
         `INSERT INTO vorstand 
@@ -94,14 +94,14 @@ const vorstandController = {
           rolle
         ]
       );
-  
+
       res.status(201).json({ message: 'Vorstand erfolgreich erstellt.' });
     } catch (error) {
       console.error('Fehler beim Erstellen des Vorstands:', error);
       res.status(500).json({ error: 'Fehler beim Erstellen des Vorstands.' });
     }
   },
-  
+
 
   getVorstand: async (req, res) => {
     try {
@@ -127,7 +127,7 @@ const vorstandController = {
   getMyProfile: async (req, res) => {
     try {
       const { id, userType, benutzername } = req.user;
-  
+
       if (userType === 'admin') {
         // Prüfe, ob dieser Admin auch im Vorstand ist – per BENUTZERNAME
         const [rows] = await pool.query(
@@ -135,7 +135,7 @@ const vorstandController = {
            FROM vorstand WHERE benutzername = ?`,
           [benutzername]
         );
-  
+
         // Wenn nicht im Vorstand, gib einfache Admin-Daten oder eine Meldung zurück
         if (rows.length === 0) {
           return res.status(200).json({
@@ -145,7 +145,7 @@ const vorstandController = {
             message: "Admin ist nicht im Vorstand eingetragen."
           });
         }
-  
+
         const v = rows[0];
         return res.status(200).json({
           id: v.id,
@@ -162,18 +162,18 @@ const vorstandController = {
           istImVorstand: true
         });
       }
-  
+
       if (userType === 'vorstand') {
         const [rows] = await pool.query(
           `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
            FROM vorstand WHERE id = ?`,
           [id]
         );
-  
+
         if (rows.length === 0) {
           return res.status(404).json({ error: "Vorstand nicht gefunden." });
         }
-  
+
         const v = rows[0];
         return res.status(200).json({
           id: v.id,
@@ -189,15 +189,15 @@ const vorstandController = {
           foto: v.foto || null
         });
       }
-  
+
       return res.status(403).json({ error: "Unbekannter Benutzertyp." });
     } catch (error) {
       console.error("Fehler beim Abrufen des Profils:", error);
       res.status(500).json({ error: "Fehler beim Abrufen des Profils." });
     }
   },
-  
-  
+
+
 
   updateMyProfile: async (req, res) => {
     try {
@@ -211,31 +211,36 @@ const vorstandController = {
         telefon,
         email,
         beschreibung,
-        benutzername
+        benutzername,
+        foto
       } = req.body;
-  
       let fotoBase64 = null;
-  
+
       if (req.file) {
-        // Bild mit sharp in PNG konvertieren und als Base64 kodieren
         const pngBuffer = await sharp(req.file.buffer)
           .png()
           .toBuffer();
         fotoBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
-      } else if (req.body.foto && req.body.foto.startsWith('data:image/png;base64,')) {
-        // bereits korrektes PNG-Base64
-        fotoBase64 = req.body.foto;
-      } else if (req.body.foto) {
-        return res.status(400).json({ error: "Foto muss hochgeladen oder als PNG-Base64 gesendet werden." });
+      } else if (foto && foto.startsWith('data:image/png;base64,')) {
+        fotoBase64 = foto;
       }
-  
-      await pool.query(
-        `UPDATE vorstand SET vorname = ?, nachname = ?, adresse = ?, plz = ?, ort = ?, 
-         telefon = ?, email = ?, beschreibung = ?, benutzername = ?, foto = ?
-         WHERE id = ?`,
-        [vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, fotoBase64, id]
-      );
-  
+
+      const params = [vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername];
+      let sql = `
+      UPDATE vorstand SET 
+        vorname = ?, nachname = ?, adresse = ?, plz = ?, ort = ?, 
+        telefon = ?, email = ?, beschreibung = ?, benutzername = ?`;
+
+      if (fotoBase64) {
+        sql += `, foto = ?`;
+        params.push(fotoBase64);
+      }
+
+      sql += ` WHERE id = ?`;
+      params.push(id);
+
+      await pool.query(sql, params);
+
       res.status(200).json({ message: "Profil erfolgreich aktualisiert." });
     } catch (error) {
       console.error("Fehler beim Aktualisieren des Profils:", error);
