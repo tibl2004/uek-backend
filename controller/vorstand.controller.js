@@ -215,20 +215,20 @@ const vorstandController = {
         beschreibung,
         benutzername,
       } = req.body;
-
+  
       let fotoBase64 = null;
-
+  
       // Wenn ein Bild über FormData hochgeladen wird (req.file)
       if (req.file && req.file.buffer) {
         const pngBuffer = await sharp(req.file.buffer).resize(400).png().toBuffer();
-        fotoBase64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+        fotoBase64 = pngBuffer.toString("base64"); // Nur der reine Base64-String
       }
-
+  
       let sql = `
         UPDATE vorstand SET 
           vorname = ?, nachname = ?, adresse = ?, plz = ?, ort = ?, 
           telefon = ?, email = ?, beschreibung = ?, benutzername = ?`;
-
+  
       const params = [
         vorname,
         nachname,
@@ -240,23 +240,23 @@ const vorstandController = {
         beschreibung,
         benutzername
       ];
-
+  
       if (fotoBase64) {
         sql += `, foto = ?`;
-        params.push(fotoBase64);
+        params.push(fotoBase64); // Nur der Base64-Inhalt ohne Präfix
       }
-
+  
       sql += ` WHERE id = ?`;
       params.push(id);
-
+  
       await pool.query(sql, params);
-      res.status(200).json({ message: "Profil erfolgreich aktualisiert." });
+      res.status(200).json({ message: "Profil erfolgreich aktualisiert (nur Bildinhalt gespeichert)." });
     } catch (error) {
       console.error("Fehler beim Aktualisieren:", error.message);
       res.status(500).json({ error: "Profil konnte nicht aktualisiert werden." });
     }
   },
-
+  
   changePasswordByAdmin: async (req, res) => {
     try {
       const userType = req.user.userType;
