@@ -212,25 +212,40 @@ const vorstandController = {
         email,
         beschreibung,
         benutzername,
-        foto
+        foto // optional: falls base64 kommt
       } = req.body;
       let fotoBase64 = null;
 
-      if (req.file) {
-        const pngBuffer = await sharp(req.file.buffer)
-          .png()
-          .toBuffer();
+      // Bild aus req.file verarbeiten (z. B. bei Upload über FormData)
+      if (req.file && req.file.buffer) {
+        const pngBuffer = await sharp(req.file.buffer).png().toBuffer();
         fotoBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
-      } else if (foto && foto.startsWith('data:image/png;base64,')) {
+      }
+
+      // Alternativ: Base64 vom Frontend übernehmen (z. B. aus Canvas o. Ä.)
+      else if (foto && foto.startsWith('data:image/png;base64,')) {
         fotoBase64 = foto;
       }
 
-      const params = [vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername];
+      // Grundlegendes SQL-Update
       let sql = `
       UPDATE vorstand SET 
         vorname = ?, nachname = ?, adresse = ?, plz = ?, ort = ?, 
         telefon = ?, email = ?, beschreibung = ?, benutzername = ?`;
 
+      const params = [
+        vorname,
+        nachname,
+        adresse,
+        plz,
+        ort,
+        telefon,
+        email,
+        beschreibung,
+        benutzername
+      ];
+
+      // Nur wenn ein neues Foto vorhanden ist → update einbauen
       if (fotoBase64) {
         sql += `, foto = ?`;
         params.push(fotoBase64);
@@ -242,9 +257,10 @@ const vorstandController = {
       await pool.query(sql, params);
 
       res.status(200).json({ message: "Profil erfolgreich aktualisiert." });
+
     } catch (error) {
-      console.error("Fehler beim Aktualisieren des Profils:", error);
-      res.status(500).json({ error: "Fehler beim Aktualisieren des Profils." });
+      console.error("Fehler beim Aktualisieren des Profils:", error.message, error.stack);
+      res.status(500).json({ error: error.message });
     }
   },
   changePasswordByAdmin: async (req, res) => {
