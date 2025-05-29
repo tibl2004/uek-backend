@@ -21,7 +21,8 @@ router.get("/public", vorstandController.getVorstand);
 router.get("/me", authenticate, vorstandController.getMyProfile);
 
 // Eigene Daten aktualisieren
-router.put("/me", authenticate, upload.single('foto'), vorstandController.updateMyProfile);
+router.put("/me", authenticate, upload.single("foto"), vorstandController.updateMyProfile);
+
 // Nur Admin darf Passwort von einem Vorstand ändern
 router.put("/change-password", authenticate, vorstandController.changePasswordByAdmin);
 
