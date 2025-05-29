@@ -211,28 +211,37 @@ const vorstandController = {
         telefon,
         email,
         beschreibung,
-        benutzername,
-        foto
+        benutzername
       } = req.body;
-
-      if (foto && !foto.startsWith("data:image/png;base64,")) {
-        return res.status(400).json({ error: "Foto muss ein PNG im Base64-Format mit Prefix sein." });
+  
+      let fotoBase64 = null;
+  
+      if (req.file) {
+        // Bild mit sharp in PNG konvertieren und als Base64 kodieren
+        const pngBuffer = await sharp(req.file.buffer)
+          .png()
+          .toBuffer();
+        fotoBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+      } else if (req.body.foto && req.body.foto.startsWith('data:image/png;base64,')) {
+        // bereits korrektes PNG-Base64
+        fotoBase64 = req.body.foto;
+      } else if (req.body.foto) {
+        return res.status(400).json({ error: "Foto muss hochgeladen oder als PNG-Base64 gesendet werden." });
       }
-
+  
       await pool.query(
         `UPDATE vorstand SET vorname = ?, nachname = ?, adresse = ?, plz = ?, ort = ?, 
          telefon = ?, email = ?, beschreibung = ?, benutzername = ?, foto = ?
          WHERE id = ?`,
-        [vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto, id]
+        [vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, fotoBase64, id]
       );
-
+  
       res.status(200).json({ message: "Profil erfolgreich aktualisiert." });
     } catch (error) {
       console.error("Fehler beim Aktualisieren des Profils:", error);
       res.status(500).json({ error: "Fehler beim Aktualisieren des Profils." });
     }
   },
-
   changePasswordByAdmin: async (req, res) => {
     try {
       const userType = req.user.userType;
