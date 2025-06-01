@@ -199,7 +199,29 @@ const vorstandController = {
     }
   },
   
-
+  getAllMitarbeiterFotos: async (req, res) => {
+    try {
+      // Nur Admins dürfen diese Funktion nutzen
+      if (req.user.userType !== 'admin') {
+        return res.status(403).json({ error: "Nur Admins dürfen Mitarbeiterfotos abrufen." });
+      }
+  
+      const [rows] = await pool.query(
+        `SELECT vorname, nachname, foto FROM vorstand`
+      );
+  
+      const mitarbeiterListe = rows.map(person => ({
+        vorname: person.vorname,
+        nachname: person.nachname,
+        foto: person.foto || null // Base64-String oder null
+      }));
+  
+      res.status(200).json(mitarbeiterListe);
+    } catch (error) {
+      console.error("Fehler beim Abrufen der Mitarbeiterfotos:", error);
+      res.status(500).json({ error: "Fehler beim Abrufen der Mitarbeiterfotos." });
+    }
+  },  
 
 
   updateMyProfile: async (req, res) => {

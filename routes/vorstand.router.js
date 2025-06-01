@@ -26,4 +26,11 @@ router.put("/me", authenticate, upload.single("foto"), vorstandController.update
 // Nur Admin darf Passwort von einem Vorstand ändern
 router.put("/change-password", authenticate, vorstandController.changePasswordByAdmin);
 
+// Route: Alle Mitarbeiter-Fotos abrufen (nur für Admins)
+router.get(
+    '/mitglieder',
+    authenticate,   // Token prüfen
+    vorstandController.getAllMitarbeiterFotos // Daten holen
+);
+
 module.exports = router;
