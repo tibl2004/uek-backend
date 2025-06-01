@@ -24,7 +24,8 @@ const eventController = {
         von,
         bis,
         alle,
-        supporter
+        supporter,
+        bildtitel  // NEU: Bildtitel aus dem Request auslesen
       } = req.body;
   
       if (!titel || !beschreibung || !ort || !von || !bis) {
@@ -34,13 +35,11 @@ const eventController = {
       let bildBase64 = null;
   
       if (req.file) {
-        // Bild vom Upload in PNG umwandeln und Base64 mit Prefix erzeugen
         const pngBuffer = await sharp(req.file.buffer)
           .png()
           .toBuffer();
         bildBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
       } else if (req.body.bild && req.body.bild.startsWith('data:image/png;base64,')) {
-        // Bild ist schon PNG-Base64
         bildBase64 = req.body.bild;
       } else if (req.body.bild) {
         return res.status(400).json({ error: "Bild muss hochgeladen oder als PNG-Base64 mit Prefix gesendet werden." });
@@ -48,8 +47,8 @@ const eventController = {
   
       await pool.query(
         `INSERT INTO events 
-         (titel, beschreibung, ort, von, bis, bild, alle, supporter) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (titel, beschreibung, ort, von, bis, bild, bildtitel, alle, supporter)  -- bildtitel hinzugefügt
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           titel, 
           beschreibung, 
@@ -57,6 +56,7 @@ const eventController = {
           von, 
           bis, 
           bildBase64, 
+          bildtitel || null,   // falls kein bildtitel mitgegeben wird, null speichern
           alle ? 1 : 0, 
           supporter ? 1 : 0
         ]
@@ -68,6 +68,7 @@ const eventController = {
       res.status(500).json({ error: "Fehler beim Erstellen des Events." });
     }
   },
+  
   
 
   getEvents: async (req, res) => {
