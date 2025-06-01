@@ -25,15 +25,17 @@ const eventController = {
         bis,
         alle,
         supporter,
-        bildtitel  // NEU: Bildtitel aus dem Request auslesen
+        bildtitel  // Bildtitel aus dem Request auslesen
       } = req.body;
   
+      // Pflichtfelder prüfen
       if (!titel || !beschreibung || !ort || !von || !bis) {
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
   
       let bildBase64 = null;
   
+      // Bild hochladen & als PNG-Base64 umwandeln
       if (req.file) {
         const pngBuffer = await sharp(req.file.buffer)
           .png()
@@ -45,20 +47,21 @@ const eventController = {
         return res.status(400).json({ error: "Bild muss hochgeladen oder als PNG-Base64 mit Prefix gesendet werden." });
       }
   
+      // Daten in DB speichern, inkl. bildtitel (oder null, falls leer)
       await pool.query(
         `INSERT INTO events 
-         (titel, beschreibung, ort, von, bis, bild, bildtitel, alle, supporter)  -- bildtitel hinzugefügt
+         (titel, beschreibung, ort, von, bis, bild, bildtitel, alle, supporter)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          titel, 
-          beschreibung, 
-          ort, 
-          von, 
-          bis, 
-          bildBase64, 
-          bildtitel || null,   // falls kein bildtitel mitgegeben wird, null speichern
-          alle ? 1 : 0, 
-          supporter ? 1 : 0
+          titel,
+          beschreibung,
+          ort,
+          von,
+          bis,
+          bildBase64,
+          bildtitel || null,
+          alle ? 1 : 0,
+          supporter ? 1 : 0,
         ]
       );
   
@@ -68,6 +71,7 @@ const eventController = {
       res.status(500).json({ error: "Fehler beim Erstellen des Events." });
     }
   },
+  
   
   
 
