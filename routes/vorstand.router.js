@@ -20,17 +20,14 @@ router.get("/public", vorstandController.getVorstand);
 // Eigene Daten abrufen
 router.get("/me", authenticate, vorstandController.getMyProfile);
 
+router.get('/fotos', authenticate, vorstandController.getVorstandFotos);
+
 // Eigene Daten aktualisieren
 router.put("/me", authenticate, upload.single("foto"), vorstandController.updateMyProfile);
 
 // Nur Admin darf Passwort von einem Vorstand ändern
 router.put("/change-password", authenticate, vorstandController.changePasswordByAdmin);
 
-// Route: Alle Mitarbeiter-Fotos abrufen (nur für Admins)
-router.get(
-    '/mitglieder',
-    authenticate,   // Token prüfen
-    vorstandController.getAllMitarbeiterFotos // Daten holen
-);
+
 
 module.exports = router;
