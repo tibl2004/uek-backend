@@ -1,6 +1,6 @@
 const pool = require("../database/index");
 const jwt = require("jsonwebtoken");
-const sharp = require("sharp"); // Falls Bildkonvertierung benötigt wird
+const sharp = require("sharp");
 
 const eventController = {
   authenticateToken: (req, res, next) => {
@@ -16,6 +16,7 @@ const eventController = {
   },
 
   createEvent: async (req, res) => {
+    const connection = await pool.getConnection();
     try {
       const {
         titel,
@@ -25,75 +26,100 @@ const eventController = {
         bis,
         alle,
         supporter,
-        bildtitel  // Bildtitel aus dem Request auslesen
+        bildtitel,
+        preise
       } = req.body;
-  
-      // Pflichtfelder prüfen
+
       if (!titel || !beschreibung || !ort || !von || !bis) {
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
-  
+
       let bildBase64 = null;
-  
-      // Bild hochladen & als PNG-Base64 umwandeln
+
       if (req.file) {
-        const pngBuffer = await sharp(req.file.buffer)
-          .png()
-          .toBuffer();
-        bildBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
-      } else if (req.body.bild && req.body.bild.startsWith('data:image/png;base64,')) {
+        const pngBuffer = await sharp(req.file.buffer).png().toBuffer();
+        bildBase64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+      } else if (req.body.bild && req.body.bild.startsWith("data:image/png;base64,")) {
         bildBase64 = req.body.bild;
       } else if (req.body.bild) {
         return res.status(400).json({ error: "Bild muss hochgeladen oder als PNG-Base64 mit Prefix gesendet werden." });
       }
-  
-      // Daten in DB speichern, inkl. bildtitel (oder null, falls leer)
-      await pool.query(
-        `INSERT INTO events 
-         (titel, beschreibung, ort, von, bis, bild, bildtitel, alle, supporter)
+
+      await connection.beginTransaction();
+
+      const [eventResult] = await connection.query(
+        `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          titel,
-          beschreibung,
-          ort,
-          von,
-          bis,
-          bildBase64,
-          bildtitel || null,
-          alle ? 1 : 0,
-          supporter ? 1 : 0,
+          titel, beschreibung, ort, von, bis,
+          bildBase64, bildtitel || null,
+          supporter || null, alle ? 1 : 0
         ]
       );
-  
+
+      const eventId = eventResult.insertId;
+
+      if (Array.isArray(preise) && preise.length > 0) {
+        const preisWerte = preise
+          .filter(p => p.preisbeschreibung && p.kosten != null)
+          .map(p => [eventId, p.preisbeschreibung, p.kosten]);
+
+        if (preisWerte.length > 0) {
+          await connection.query(
+            `INSERT INTO event_preise (event_id, preisbeschreibung, kosten) VALUES ?`,
+            [preisWerte]
+          );
+        }
+      }
+
+      await connection.commit();
       res.status(201).json({ message: "Event erfolgreich erstellt." });
     } catch (error) {
+      await connection.rollback();
       console.error("Fehler beim Erstellen des Events:", error);
       res.status(500).json({ error: "Fehler beim Erstellen des Events." });
+    } finally {
+      connection.release();
     }
   },
-  
-  
-  
 
   getEvents: async (req, res) => {
     try {
-      const [rows] = await pool.query(
-        `SELECT id, titel, beschreibung, ort, von, bis, bild, alle, supporter FROM events ORDER BY von DESC`
-      );
+      const [events] = await pool.query(`
+        SELECT e.id, e.titel, e.beschreibung, e.ort, e.von, e.bis, e.bild, e.alle, e.supporter,
+               p.id as preis_id, p.preisbeschreibung, p.kosten
+        FROM events e
+        LEFT JOIN event_preise p ON e.id = p.event_id
+        ORDER BY e.von DESC
+      `);
 
-      const events = rows.map(event => ({
-        id: event.id,
-        titel: event.titel,
-        beschreibung: event.beschreibung,
-        ort: event.ort,
-        von: event.von,
-        bis: event.bis,
-        bild: event.bild ? `data:image/png;base64,${event.bild}` : null,
-        alle: !!event.alle,
-        supporter: !!event.supporter
-      }));
+      const grouped = {};
+      for (const row of events) {
+        if (!grouped[row.id]) {
+          grouped[row.id] = {
+            id: row.id,
+            titel: row.titel,
+            beschreibung: row.beschreibung,
+            ort: row.ort,
+            von: row.von,
+            bis: row.bis,
+            bild: row.bild ? `data:image/png;base64,${row.bild}` : null,
+            alle: !!row.alle,
+            supporter: !!row.supporter,
+            preise: []
+          };
+        }
 
-      res.status(200).json(events);
+        if (row.preis_id) {
+          grouped[row.id].preise.push({
+            id: row.preis_id,
+            preisbeschreibung: row.preisbeschreibung,
+            kosten: row.kosten
+          });
+        }
+      }
+
+      res.status(200).json(Object.values(grouped));
     } catch (error) {
       console.error("Fehler beim Abrufen der Events:", error);
       res.status(500).json({ error: "Fehler beim Abrufen der Events." });
@@ -103,27 +129,43 @@ const eventController = {
   getEventById: async (req, res) => {
     try {
       const eventId = req.params.id;
-      const [rows] = await pool.query(
-        `SELECT id, titel, beschreibung, ort, von, bis, bild, alle, supporter FROM events WHERE id = ?`,
-        [eventId]
-      );
 
-      if (rows.length === 0) {
+      const [events] = await pool.query(`
+        SELECT e.id, e.titel, e.beschreibung, e.ort, e.von, e.bis, e.bild, e.alle, e.supporter,
+               p.id as preis_id, p.preisbeschreibung, p.kosten
+        FROM events e
+        LEFT JOIN event_preise p ON e.id = p.event_id
+        WHERE e.id = ?
+      `, [eventId]);
+
+      if (events.length === 0) {
         return res.status(404).json({ error: "Event nicht gefunden." });
       }
 
-      const event = rows[0];
-      res.status(200).json({
-        id: event.id,
-        titel: event.titel,
-        beschreibung: event.beschreibung,
-        ort: event.ort,
-        von: event.von,
-        bis: event.bis,
-        bild: event.bild ? `data:image/png;base64,${event.bild}` : null,
-        alle: !!event.alle,
-        supporter: !!event.supporter
-      });
+      const event = {
+        id: events[0].id,
+        titel: events[0].titel,
+        beschreibung: events[0].beschreibung,
+        ort: events[0].ort,
+        von: events[0].von,
+        bis: events[0].bis,
+        bild: events[0].bild ? `data:image/png;base64,${events[0].bild}` : null,
+        alle: !!events[0].alle,
+        supporter: !!events[0].supporter,
+        preise: []
+      };
+
+      for (const row of events) {
+        if (row.preis_id) {
+          event.preise.push({
+            id: row.preis_id,
+            preisbeschreibung: row.preisbeschreibung,
+            kosten: row.kosten
+          });
+        }
+      }
+
+      res.status(200).json(event);
     } catch (error) {
       console.error("Fehler beim Abrufen des Events:", error);
       res.status(500).json({ error: "Fehler beim Abrufen des Events." });
@@ -137,15 +179,7 @@ const eventController = {
       }
 
       const eventId = req.params.id;
-      const {
-        titel,
-        beschreibung,
-        ort,
-        von,
-        bis,
-        alle,
-        supporter
-      } = req.body;
+      const { titel, beschreibung, ort, von, bis, alle, supporter } = req.body;
 
       let bildBase64 = null;
       if (req.body.bild) {
@@ -155,7 +189,6 @@ const eventController = {
         bildBase64 = req.body.bild.replace(/^data:image\/png;base64,/, '');
       }
 
-      // Update-Query dynamisch mit Bild nur, wenn vorhanden
       let sql = `UPDATE events SET titel = ?, beschreibung = ?, ort = ?, von = ?, bis = ?, alle = ?, supporter = ?`;
       let params = [titel, beschreibung, ort, von, bis, alle ? 1 : 0, supporter ? 1 : 0];
 
