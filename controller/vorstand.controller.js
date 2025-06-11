@@ -167,14 +167,12 @@ const vorstandController = {
       const { id, userTypes, benutzername } = req.user;
 
       if (userTypes.includes('admin')) {
-        // Prüfe, ob dieser Admin auch im Vorstand ist – per BENUTZERNAME
         const [rows] = await pool.query(
           `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
            FROM vorstand WHERE benutzername = ?`,
           [benutzername]
         );
 
-        // Wenn nicht im Vorstand, gib einfache Admin-Daten oder eine Meldung zurück
         if (rows.length === 0) {
           return res.status(200).json({
             id,
@@ -209,7 +207,7 @@ const vorstandController = {
         );
 
         if (rows.length === 0) {
-          return res.status(404).json({ error: "Vorstand nicht gefunden." });
+          return res.status(404).json({ error: 'Vorstand nicht gefunden.' });
         }
 
         const v = rows[0];
@@ -228,14 +226,12 @@ const vorstandController = {
         });
       }
 
-      return res.status(403).json({ error: "Unbekannter Benutzertyp." });
+      return res.status(403).json({ error: 'Unbekannter Benutzertyp.' });
     } catch (error) {
-      console.error("Fehler beim Abrufen des Profils:", error);
-      res.status(500).json({ error: "Fehler beim Abrufen des Profils." });
+      console.error('Fehler beim Abrufen des Profils:', error);
+      res.status(500).json({ error: 'Fehler beim Abrufen des Profils.' });
     }
   },
-
-
 
 
   updateMyProfile: async (req, res) => {
