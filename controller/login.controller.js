@@ -75,12 +75,16 @@ const loginController = {
       
           const token = jwt.sign(tokenPayload, 'secretKey', { expiresIn: '240h' });
       
-          res.json({ token, userTypes, rolle, name: tokenPayload.name });
+          res.json({
+            token,
+            ...tokenPayload
+          });
         } catch (error) {
           console.error('Fehler beim Login:', error);
           res.status(500).json({ error: 'Fehler beim Login.' });
         }
       }
+      
       
 };
 
