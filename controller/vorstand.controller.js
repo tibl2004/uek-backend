@@ -24,10 +24,16 @@ const vorstandController = {
 
   createVorstand: async (req, res) => {
     try {
-      // Nur Admin darf Vorstand erstellen
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Admins dürfen einen Vorstand erstellen.' });
+      // Nur Admins, die auch im Vorstand sind, dürfen neue Vorstandsmitglieder erstellen
+      if (
+        !req.user.userTypes ||
+        !Array.isArray(req.user.userTypes) ||
+        !req.user.userTypes.includes('admin') ||
+        !req.user.userTypes.includes('vorstand')
+      ) {
+        return res.status(403).json({ error: 'Nur Benutzer mit Admin- und Vorstandrechten dürfen einen Vorstand erstellen.' });
       }
+
 
       const {
         geschlecht,
@@ -52,15 +58,25 @@ const vorstandController = {
         return res.status(400).json({ error: "Alle Pflichtfelder inklusive Rolle müssen ausgefüllt sein." });
       }
 
-
-      // Falls Foto mitgeliefert wird, prüfe das Format
+      // Falls Foto mitgeliefert wird, prüfe das Format und wandle es in PNG um
       let base64Foto = null;
       if (foto) {
-        if (!foto.startsWith('data:image/png;base64,')) {
-          return res.status(400).json({ error: 'Foto muss als PNG im Base64-Format mit Prefix gesendet werden.' });
+        const matches = foto.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+          return res.status(400).json({ error: 'Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix.' });
         }
-        // Optional: Header entfernen, nur wenn du es so wie bei "unterschrift" machen willst
-        base64Foto = foto.replace(/^data:image\/png;base64,/, '');
+
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        // Optional: nur bestimmte Formate zulassen
+        if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
+          return res.status(400).json({ error: 'Nur PNG, JPEG, JPG oder WEBP erlaubt.' });
+        }
+
+        const convertedBuffer = await sharp(buffer).resize(400).png().toBuffer();
+        base64Foto = convertedBuffer.toString('base64'); // Reines Base64 ohne Prefix
       }
 
       // Benutzername darf nicht doppelt vorkommen
@@ -131,25 +147,25 @@ const vorstandController = {
       const [rows] = await pool.query(
         `SELECT vorname, nachname, foto FROM vorstand`
       );
-  
+
       const result = rows.map(v => ({
         vorname: v.vorname,
         nachname: v.nachname,
         foto: v.foto || null // Base64-String oder null
       }));
-  
+
       res.status(200).json(result);
     } catch (error) {
       console.error("Fehler beim Abrufen der Vorstand-Fotos:", error);
       res.status(500).json({ error: "Fehler beim Abrufen der Vorstand-Fotos." });
     }
   },
-  
+
 
   getMyProfile: async (req, res) => {
     try {
       const { id, userTypes, benutzername } = req.user;
-  
+
       if (userTypes.includes('admin')) {
         // Prüfe, ob dieser Admin auch im Vorstand ist – per BENUTZERNAME
         const [rows] = await pool.query(
@@ -157,7 +173,7 @@ const vorstandController = {
            FROM vorstand WHERE benutzername = ?`,
           [benutzername]
         );
-  
+
         // Wenn nicht im Vorstand, gib einfache Admin-Daten oder eine Meldung zurück
         if (rows.length === 0) {
           return res.status(200).json({
@@ -167,7 +183,7 @@ const vorstandController = {
             message: "Admin ist nicht im Vorstand eingetragen."
           });
         }
-  
+
         const v = rows[0];
         return res.status(200).json({
           id: v.id,
@@ -184,18 +200,18 @@ const vorstandController = {
           istImVorstand: true
         });
       }
-  
+
       if (userTypes.includes('vorstand')) {
         const [rows] = await pool.query(
           `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
            FROM vorstand WHERE id = ?`,
           [id]
         );
-  
+
         if (rows.length === 0) {
           return res.status(404).json({ error: "Vorstand nicht gefunden." });
         }
-  
+
         const v = rows[0];
         return res.status(200).json({
           id: v.id,
@@ -211,14 +227,14 @@ const vorstandController = {
           foto: v.foto || null
         });
       }
-  
+
       return res.status(403).json({ error: "Unbekannter Benutzertyp." });
     } catch (error) {
       console.error("Fehler beim Abrufen des Profils:", error);
       res.status(500).json({ error: "Fehler beim Abrufen des Profils." });
     }
   },
-  
+
 
 
 
@@ -236,20 +252,20 @@ const vorstandController = {
         beschreibung,
         benutzername,
       } = req.body;
-  
+
       let fotoBase64 = null;
-  
+
       // Wenn ein Bild über FormData hochgeladen wird (req.file)
       if (req.file && req.file.buffer) {
         const pngBuffer = await sharp(req.file.buffer).resize(400).png().toBuffer();
         fotoBase64 = pngBuffer.toString("base64"); // Nur der reine Base64-String
       }
-  
+
       let sql = `
         UPDATE vorstand SET 
           vorname = ?, nachname = ?, adresse = ?, plz = ?, ort = ?, 
           telefon = ?, email = ?, beschreibung = ?, benutzername = ?`;
-  
+
       const params = [
         vorname,
         nachname,
@@ -261,15 +277,15 @@ const vorstandController = {
         beschreibung,
         benutzername
       ];
-  
+
       if (fotoBase64) {
         sql += `, foto = ?`;
         params.push(fotoBase64); // Nur der Base64-Inhalt ohne Präfix
       }
-  
+
       sql += ` WHERE id = ?`;
       params.push(id);
-  
+
       await pool.query(sql, params);
       res.status(200).json({ message: "Profil erfolgreich aktualisiert (nur Bildinhalt gespeichert)." });
     } catch (error) {
@@ -277,7 +293,7 @@ const vorstandController = {
       res.status(500).json({ error: "Profil konnte nicht aktualisiert werden." });
     }
   },
-  
+
   changePasswordByAdmin: async (req, res) => {
     try {
       const userType = req.user.userType;
