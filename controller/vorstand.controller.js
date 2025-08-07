@@ -164,20 +164,16 @@ const vorstandController = {
 
   getMyProfile: async (req, res) => {
     try {
-      const { id, userTypes, benutzername } = req.user;
+      const { id, benutzername } = req.user;
   
-      // Priorität: Wenn sowohl "admin" als auch "vorstand"
-      if (userTypes.includes('vorstand')) {
-        const [rows] = await pool.query(
-          `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
-           FROM vorstand WHERE id = ?`,
-          [id]
-        );
+      // 1. Immer zuerst prüfen, ob der User im Vorstand ist (egal ob admin oder nicht)
+      const [rows] = await pool.query(
+        `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
+         FROM vorstand WHERE id = ? OR benutzername = ?`,
+        [id, benutzername]
+      );
   
-        if (rows.length === 0) {
-          return res.status(404).json({ error: 'Vorstand nicht gefunden.' });
-        }
-  
+      if (rows.length > 0) {
         const v = rows[0];
         return res.status(200).json({
           id: v.id,
@@ -195,46 +191,19 @@ const vorstandController = {
         });
       }
   
-      if (userTypes.includes('admin')) {
-        const [rows] = await pool.query(
-          `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
-           FROM vorstand WHERE benutzername = ?`,
-          [benutzername]
-        );
+      // 2. Wenn kein Vorstandseintrag vorhanden ist, gib nur Basisdaten zurück
+      return res.status(200).json({
+        id,
+        benutzername,
+        istImVorstand: false,
+        message: "Benutzer ist nicht im Vorstand eingetragen."
+      });
   
-        if (rows.length === 0) {
-          return res.status(200).json({
-            id,
-            benutzername,
-            istImVorstand: false,
-            message: "Admin ist nicht im Vorstand eingetragen."
-          });
-        }
-  
-        const v = rows[0];
-        return res.status(200).json({
-          id: v.id,
-          vorname: v.vorname,
-          nachname: v.nachname,
-          adresse: v.adresse,
-          plz: v.plz,
-          ort: v.ort,
-          telefon: v.telefon,
-          email: v.email,
-          beschreibung: v.beschreibung,
-          benutzername: v.benutzername,
-          foto: v.foto || null,
-          istImVorstand: true
-        });
-      }
-  
-      return res.status(403).json({ error: 'Unbekannter Benutzertyp.' });
     } catch (error) {
       console.error('Fehler beim Abrufen des Profils:', error);
       res.status(500).json({ error: 'Fehler beim Abrufen des Profils.' });
     }
-  },
-  
+  },  
 
   updateMyProfile: async (req, res) => {
     try {
