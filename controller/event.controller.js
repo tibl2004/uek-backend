@@ -16,8 +16,13 @@ const eventController = {
   },
 
   createEvent: async (req, res) => {
-    const connection = await pool.getConnection();
     try {
+      // Prüfen, ob User Rolle vorstand oder admin ist
+      if (!req.user || !['admin', 'vorstand'].includes(req.user.rolle)) {
+        return res.status(403).json({ error: "Nur Vorstand oder Admin dürfen Events erstellen." });
+      }
+  
+      const connection = await pool.getConnection();
       const {
         titel,
         beschreibung,
@@ -29,24 +34,26 @@ const eventController = {
         bildtitel,
         preise
       } = req.body;
-
+  
       if (!titel || !beschreibung || !ort || !von || !bis) {
+        connection.release();
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
-
+  
       let bildBase64 = null;
-
+  
       if (req.file) {
         const pngBuffer = await sharp(req.file.buffer).png().toBuffer();
         bildBase64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
       } else if (req.body.bild && req.body.bild.startsWith("data:image/png;base64,")) {
         bildBase64 = req.body.bild;
       } else if (req.body.bild) {
+        connection.release();
         return res.status(400).json({ error: "Bild muss hochgeladen oder als PNG-Base64 mit Prefix gesendet werden." });
       }
-
+  
       await connection.beginTransaction();
-
+  
       const [eventResult] = await connection.query(
         `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -56,14 +63,14 @@ const eventController = {
           supporter || null, alle ? 1 : 0
         ]
       );
-
+  
       const eventId = eventResult.insertId;
-
+  
       if (Array.isArray(preise) && preise.length > 0) {
         const preisWerte = preise
           .filter(p => p.preisbeschreibung && p.kosten != null)
           .map(p => [eventId, p.preisbeschreibung, p.kosten]);
-
+  
         if (preisWerte.length > 0) {
           await connection.query(
             `INSERT INTO event_preise (event_id, preisbeschreibung, kosten) VALUES ?`,
@@ -71,18 +78,20 @@ const eventController = {
           );
         }
       }
-
+  
       await connection.commit();
+      connection.release();
+  
       res.status(201).json({ message: "Event erfolgreich erstellt." });
     } catch (error) {
-      await connection.rollback();
+      if (connection) await connection.rollback();
+      if (connection) connection.release();
+  
       console.error("Fehler beim Erstellen des Events:", error);
       res.status(500).json({ error: "Fehler beim Erstellen des Events." });
-    } finally {
-      connection.release();
     }
   },
-
+  
   getEvents: async (req, res) => {
     try {
       const [events] = await pool.query(`

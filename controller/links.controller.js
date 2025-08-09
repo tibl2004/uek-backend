@@ -71,57 +71,64 @@ const linksController = {
 
   updateSectionWithLinks: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Administratoren dürfen Inhalte aktualisieren.' });
+      if (req.user.userType !== 'admin' && req.user.userType !== 'vorstand') {
+        return res.status(403).json({ error: 'Nur Administratoren oder Vorstände dürfen Inhalte aktualisieren.' });
       }
-
+  
       const sectionId = req.params.id;
       const { subtitle, links } = req.body;
-      // links = [{id (optional), text, url}, ...]
-
-      if (!subtitle || !Array.isArray(links)) {
-        return res.status(400).json({ error: 'Untertitel und Links müssen angegeben werden.' });
+  
+      // Prüfen: Ist überhaupt was gesendet?
+      if (!subtitle && !Array.isArray(links)) {
+        return res.status(400).json({ error: 'Keine Änderungen übermittelt.' });
       }
-
-      // 1. Untertitel updaten
-      const updateSectionSql = 'UPDATE content_sections SET subtitle = ? WHERE id = ?';
-      await pool.query(updateSectionSql, [subtitle, sectionId]);
-
-      // 2. Links aktualisieren
-      // Links mit ID updaten, neue Links einfügen, gelöschte Links entfernen
-      // 2a. Alle existierenden Links zur Section holen
-      const [existingLinks] = await pool.query('SELECT * FROM content_links WHERE section_id = ?', [sectionId]);
-
-      const existingLinkIds = existingLinks.map(l => l.id);
-      const sentLinkIds = links.filter(l => l.id).map(l => l.id);
-
-      // 2b. Links löschen, die nicht mehr gesendet wurden
-      const toDeleteIds = existingLinkIds.filter(id => !sentLinkIds.includes(id));
-      if (toDeleteIds.length > 0) {
-        const deleteSql = `DELETE FROM content_links WHERE id IN (${toDeleteIds.map(() => '?').join(',')})`;
-        await pool.query(deleteSql, toDeleteIds);
+  
+      // 1. Subtitle aktualisieren, wenn gesendet
+      if (subtitle) {
+        await pool.query('UPDATE content_sections SET subtitle = ? WHERE id = ?', [subtitle, sectionId]);
       }
-
-      // 2c. Links updaten oder einfügen
-      for (const link of links) {
-        if (link.id) {
-          // Update
-          const updateLinkSql = 'UPDATE content_links SET link_text = ?, link_url = ? WHERE id = ?';
-          await pool.query(updateLinkSql, [link.text, link.url, link.id]);
-        } else {
-          // Insert neu
-          const insertLinkSql = 'INSERT INTO content_links (section_id, link_text, link_url) VALUES (?, ?, ?)';
-          await pool.query(insertLinkSql, [sectionId, link.text, link.url]);
+  
+      // 2. Links aktualisieren, wenn gesendet
+      if (Array.isArray(links)) {
+        // Bestehende Links holen
+        const [existingLinks] = await pool.query(
+          'SELECT id FROM content_links WHERE section_id = ?',
+          [sectionId]
+        );
+  
+        const existingLinkIds = existingLinks.map(l => l.id);
+        const sentLinkIds = links.filter(l => l.id).map(l => l.id);
+  
+        // Links löschen, die nicht mehr vorhanden sind
+        const toDeleteIds = existingLinkIds.filter(id => !sentLinkIds.includes(id));
+        if (toDeleteIds.length > 0) {
+          const deleteSql = `DELETE FROM content_links WHERE id IN (${toDeleteIds.map(() => '?').join(',')})`;
+          await pool.query(deleteSql, toDeleteIds);
+        }
+  
+        // Links updaten oder neu einfügen
+        for (const link of links) {
+          if (link.id) {
+            await pool.query(
+              'UPDATE content_links SET link_text = ?, link_url = ? WHERE id = ?',
+              [link.text, link.url, link.id]
+            );
+          } else {
+            await pool.query(
+              'INSERT INTO content_links (section_id, link_text, link_url) VALUES (?, ?, ?)',
+              [sectionId, link.text, link.url]
+            );
+          }
         }
       }
-
+  
       res.json({ message: 'Inhalt erfolgreich aktualisiert.' });
     } catch (error) {
       console.error("Fehler beim Aktualisieren der Inhalte:", error);
       res.status(500).json({ error: "Fehler beim Aktualisieren der Inhalte." });
     }
   },
-
+  
   reorderLinks: async (req, res) => {
     try {
       const { linkOrder } = req.body;
