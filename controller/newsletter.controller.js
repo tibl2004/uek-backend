@@ -6,6 +6,8 @@ const cron = require('node-cron');
 const crypto = require('crypto'); // Für Token-Generierung
 const moment = require('moment'); // Oder mit native JS, s.u.
 const { DateTime } = require('luxon');
+const sharp = require('sharp');
+
 
 // Mail-Transporter vorbereiten (GMX)
 const transporter = nodemailer.createTransport({
