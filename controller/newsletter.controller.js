@@ -41,66 +41,77 @@ const newsletterController = {
       if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
         return res.status(403).json({ error: 'Nur Administratoren dürfen Newsletter erstellen.' });
       }
-
+  
       const { title, sections, send_date } = req.body;
-
+  
       if (!title || !sections || !send_date) {
         return res.status(400).json({ error: 'title, sections und send_date sind erforderlich.' });
       }
       if (!Array.isArray(sections) || sections.length === 0) {
         return res.status(400).json({ error: 'sections muss ein nicht-leeres Array sein.' });
       }
-
+  
       // Newsletter Grunddaten speichern
       const [result] = await pool.query(
         'INSERT INTO newsletter (title, send_date) VALUES (?, ?)',
         [title, send_date]
       );
       const newsletterId = result.insertId;
-
+  
       // Sections speichern: Foto wird direkt nach Untertitel skaliert und gespeichert, Text danach (oder leer)
       for (const section of sections) {
         const { subtitle, text, foto } = section;
-
+  
         let base64Foto = null;
         if (foto) {
-          // Base64 Validierung mit data:image/... prefix
-          const matches = foto.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-          if (!matches || matches.length !== 3) {
-            return res.status(400).json({ error: 'Ungültiges Bildformat. Erwartet Base64 mit data:image/... prefix.' });
+          try {
+            // Base64 Validierung mit data:image/... prefix
+            const matches = foto.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+            if (!matches || matches.length !== 3) {
+              console.warn('Ungültiges Bildformat, wird ignoriert.');
+              base64Foto = null;
+            } else {
+              const mimeType = matches[1];
+              const base64Data = matches[2];
+  
+              if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
+                console.warn('Nicht erlaubtes Bildformat, wird ignoriert:', mimeType);
+                base64Foto = null;
+              } else if (base64Data.length < 100) { 
+                // zu kurze Base64-Daten = wahrscheinlich kaputt
+                console.warn('Base64 Bilddaten zu kurz, wird ignoriert.');
+                base64Foto = null;
+              } else {
+                const buffer = Buffer.from(base64Data, 'base64');
+  
+                // Bild skalieren auf max 400x400 und als PNG speichern
+                const convertedBuffer = await sharp(buffer)
+                  .png()
+                  .toBuffer();
+  
+                base64Foto = 'data:image/png;base64,' + convertedBuffer.toString('base64');
+              }
+            }
+          } catch (err) {
+            console.warn('Fehler bei Bildverarbeitung, Bild wird ignoriert:', err.message);
+            base64Foto = null;
           }
-
-          const mimeType = matches[1];
-          const base64Data = matches[2];
-
-          if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
-            return res.status(400).json({ error: 'Nur PNG, JPEG, JPG oder WEBP sind erlaubt.' });
-          }
-
-          const buffer = Buffer.from(base64Data, 'base64');
-
-          // Bild skalieren auf max 400x400 und als PNG speichern
-          const convertedBuffer = await sharp(buffer)
-            .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-            .png()
-            .toBuffer();
-
-          base64Foto = 'data:image/png;base64,' + convertedBuffer.toString('base64');
         }
-
+  
         // In DB speichern: subtitle, image, text (Text leer falls nicht vorhanden)
         await pool.query(
           'INSERT INTO newsletter_sections (newsletter_id, subtitle, image, text) VALUES (?, ?, ?, ?)',
           [newsletterId, subtitle, base64Foto || '', text || '']
         );
       }
-
+  
       return res.status(201).json({ message: 'Newsletter wurde erfolgreich erstellt!', newsletterId });
     } catch (error) {
       console.error('Fehler beim Erstellen des Newsletters:', error);
       return res.status(500).json({ error: 'Interner Serverfehler' });
     }
   },
+  
 
   getAllSubscribers: async (req, res) => {
     try {
