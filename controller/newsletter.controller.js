@@ -4,10 +4,7 @@ const pool = require('../database/index');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const crypto = require('crypto'); // Für Token-Generierung
-const moment = require('moment'); // Oder mit native JS, s.u.
-const { DateTime } = require('luxon');
 const sharp = require('sharp');
-
 
 // Mail-Transporter vorbereiten (GMX)
 const transporter = nodemailer.createTransport({
@@ -37,10 +34,11 @@ const newsletterController = {
       next();
     });
   },
+
   create: async (req, res) => {
     try {
       // Nur admin darf erstellen
-      if (req.user.userTypes && !req.user.userTypes.includes('admin')) {
+      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
         return res.status(403).json({ error: 'Nur Administratoren dürfen Newsletter erstellen.' });
       }
 
@@ -60,7 +58,7 @@ const newsletterController = {
       );
       const newsletterId = result.insertId;
 
-      // Sections speichern: Foto direkt nach Untertitel, Text danach (oder leer)
+      // Sections speichern: Foto wird direkt nach Untertitel skaliert und gespeichert, Text danach (oder leer)
       for (const section of sections) {
         const { subtitle, text, foto } = section;
 
@@ -103,16 +101,19 @@ const newsletterController = {
       return res.status(500).json({ error: 'Interner Serverfehler' });
     }
   },
-  
+
   getAllSubscribers: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
+      // Hier prüfe ich userTypes-Array auf admin
+      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
         return res.status(403).json({ error: 'Nur Admins dürfen Abonnenten einsehen' });
       }
-  
+
       const [subscribers] = await pool.query(`
         SELECT 
           id, 
+          vorname,
+          nachname,
           email, 
           subscribed_at, 
           unsubscribed_at,
@@ -123,15 +124,13 @@ const newsletterController = {
         FROM newsletter_subscribers
         ORDER BY subscribed_at DESC
       `);
-  
+
       res.json(subscribers);
     } catch (error) {
       console.error('Fehler beim Abrufen der Abonnenten:', error);
       res.status(500).json({ error: 'Serverfehler beim Abrufen der Abonnenten' });
     }
   },
-  
-  
 
   getAll: async (req, res) => {
     try {
@@ -145,12 +144,11 @@ const newsletterController = {
 
   getById: async (req, res) => {
     try {
-      const {
-         id } = req.params;
+      const { id } = req.params;
       const [[newsletter]] = await pool.query('SELECT * FROM newsletter WHERE id = ?', [id]);
       if (!newsletter) return res.status(404).json({ error: 'Newsletter nicht gefunden' });
 
-      const [sections] = await pool.query('SELECT subtitle, text FROM newsletter_sections WHERE newsletter_id = ?', [id]);
+      const [sections] = await pool.query('SELECT subtitle, image, text FROM newsletter_sections WHERE newsletter_id = ?', [id]);
 
       res.json({ newsletter, sections });
     } catch (error) {
@@ -162,23 +160,23 @@ const newsletterController = {
   subscribe: async (req, res) => {
     try {
       const { vorname, nachname, email, newsletter_optin } = req.body;
-  
+
       // Pflichtfelder prüfen
       if (!vorname || !nachname || !email) {
         return res.status(400).json({ error: 'Vorname, Nachname und E-Mail sind erforderlich' });
       }
-  
+
       // Checkbox muss TRUE sein
       if (newsletter_optin !== true) {
         return res.status(400).json({ error: 'Newsletter-Opt-in muss bestätigt sein' });
       }
-  
+
       // Prüfen, ob schon vorhanden
       const [[existing]] = await pool.query(
         'SELECT * FROM newsletter_subscribers WHERE email = ?',
         [email]
       );
-  
+
       if (existing) {
         if (existing.unsubscribed_at === null) {
           return res.status(400).json({ error: 'Diese E-Mail ist bereits angemeldet' });
@@ -189,7 +187,7 @@ const newsletterController = {
             'UPDATE newsletter_subscribers SET unsubscribed_at = NULL, subscribed_at = NOW(), unsubscribe_token = ?, vorname = ?, nachname = ?, newsletter_optin = 1 WHERE email = ?',
             [newToken, vorname, nachname, email]
           );
-  
+
           // Bestätigungsmail senden
           await transporter.sendMail({
             from: '"Jugendverein" <newsletter@jugendverein.de>',
@@ -205,18 +203,18 @@ const newsletterController = {
               </div>
             `,
           });
-  
+
           return res.json({ message: 'Newsletter-Anmeldung reaktiviert' });
         }
       }
-  
+
       // Neue Anmeldung
       const unsubscribeToken = crypto.randomBytes(20).toString('hex');
       await pool.query(
         'INSERT INTO newsletter_subscribers (vorname, nachname, email, unsubscribe_token, newsletter_optin) VALUES (?, ?, ?, ?, 1)',
         [vorname, nachname, email, unsubscribeToken]
       );
-  
+
       // Bestätigungsmail
       await transporter.sendMail({
         from: '"Jugendverein" <newsletter@jugendverein.de>',
@@ -224,262 +222,154 @@ const newsletterController = {
         subject: 'Newsletter-Anmeldung bestätigt',
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9;">
-            <h2 style="color: #0056b3;">Vielen Dank für deine Anmeldung!</h2>
-            <p>Du hast dich erfolgreich für unseren Vereins-Newsletter registriert.</p>
-            <p>Wir halten dich über Neuigkeiten, Veranstaltungen und Aktionen unseres Vereins auf dem Laufenden.</p>
-            <p>Wenn du dich wieder abmelden möchtest, kannst du das jederzeit über diesen Link tun:</p>
+            <h2 style="color: #0056b3;">Willkommen zum Newsletter unseres Vereins!</h2>
+            <p>Du hast dich erfolgreich für unseren Newsletter angemeldet.</p>
+            <p>Wenn du dich abmelden möchtest, kannst du das jederzeit über folgenden Link tun:</p>
             <a href="https://meinverein.de/api/newsletter/unsubscribe?token=${unsubscribeToken}" style="color: #0056b3;">Vom Newsletter abmelden</a>
             <p style="margin-top: 30px; font-size: 12px; color: #999;">© ${new Date().getFullYear()} Jugendverein – Alle Rechte vorbehalten</p>
           </div>
         `,
       });
-  
-      res.status(201).json({ message: 'Newsletter-Anmeldung erfolgreich' });
-  
+
+      res.json({ message: 'Newsletter-Anmeldung erfolgreich' });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Serverfehler bei Newsletter-Anmeldung' });
+      console.error('Fehler beim Newsletter-Anmelden:', error);
+      res.status(500).json({ error: 'Serverfehler bei der Anmeldung' });
     }
   },
-  
-  
+
   unsubscribe: async (req, res) => {
     try {
       const { token } = req.query;
-  
-      if (!token || typeof token !== 'string') {
-        return res.status(400).send('<h3>Fehler: Kein gültiger Abmelde-Token übergeben.</h3>');
+
+      if (!token) {
+        return res.status(400).json({ error: 'Token wird benötigt' });
       }
-  
-      const [subscribers] = await pool.query(
-        'SELECT * FROM newsletter_subscribers WHERE unsubscribe_token = ? AND unsubscribed_at IS NULL',
+
+      const [[subscriber]] = await pool.query(
+        'SELECT * FROM newsletter_subscribers WHERE unsubscribe_token = ?',
         [token]
       );
-  
-      if (!subscribers || subscribers.length === 0) {
-        return res.status(404).send('<h3>Dieser Abmelde-Link ist ungültig oder wurde bereits verwendet.</h3>');
+
+      if (!subscriber) {
+        return res.status(404).json({ error: 'Ungültiger Abmelde-Token' });
       }
-  
+
+      if (subscriber.unsubscribed_at !== null) {
+        return res.status(400).json({ error: 'Du bist bereits abgemeldet' });
+      }
+
       await pool.query(
-        'UPDATE newsletter_subscribers SET unsubscribed_at = NOW() WHERE unsubscribe_token = ?',
-        [token]
+        'UPDATE newsletter_subscribers SET unsubscribed_at = NOW() WHERE id = ?',
+        [subscriber.id]
       );
-  
-      return res.send(`
-        <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
-          <h2>Du wurdest erfolgreich vom Newsletter abgemeldet.</h2>
-          <p style="color: gray;">Es tut uns leid, dich gehen zu sehen. Du kannst dich jederzeit wieder anmelden.</p>
-          <a href="https://tbs-solutions.vercel.app" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#0066cc;color:white;text-decoration:none;border-radius:4px;">Zurück zur Startseite</a>
-        </div>
-      `);
+
+      res.json({ message: 'Du wurdest erfolgreich vom Newsletter abgemeldet' });
     } catch (error) {
-      console.error('Fehler beim Abmelden vom Newsletter:', error);
-      return res.status(500).send('<h3>Serverfehler bei der Newsletter-Abmeldung.</h3>');
+      console.error('Fehler beim Abmelden:', error);
+      res.status(500).json({ error: 'Serverfehler beim Abmelden' });
     }
   },
-  // NEUE FUNKTION: Mehrere E-Mails importieren
-importSubscribers: async (req, res) => {
-  try {
-    if (req.user.userType !== 'admin') {
-      return res.status(403).json({ error: 'Nur Admin darf Abonnenten importieren' });
-    }
 
-    let { emails } = req.body;
-    if (!emails) {
-      return res.status(400).json({ error: 'Keine E-Mail-Adressen übergeben' });
-    }
-
-    // Falls String → in Array umwandeln
-    if (typeof emails === 'string') {
-      emails = emails.split(/[\s,;]+/).map(e => e.trim()).filter(e => e);
-    }
-
-    if (!Array.isArray(emails) || emails.length === 0) {
-      return res.status(400).json({ error: 'Ungültiges E-Mail-Format' });
-    }
-
-    let added = 0;
-    let reactivated = 0;
-    let skipped = 0;
-
-    for (const email of emails) {
-      // Existenz prüfen
-      const [[existing]] = await pool.query(
-        'SELECT id, unsubscribed_at FROM newsletter_subscribers WHERE email = ?',
-        [email]
-      );
-
-      if (existing) {
-        if (existing.unsubscribed_at) {
-          // Reaktivieren
-          const newToken = crypto.randomBytes(20).toString('hex');
-          await pool.query(
-            'UPDATE newsletter_subscribers SET unsubscribed_at = NULL, subscribed_at = NOW(), unsubscribe_token = ? WHERE id = ?',
-            [newToken, existing.id]
-          );
-          reactivated++;
-        } else {
-          skipped++;
-        }
-      } else {
-        // Neu hinzufügen
-        const unsubscribeToken = crypto.randomBytes(20).toString('hex');
-        await pool.query(
-          'INSERT INTO newsletter_subscribers (email, unsubscribe_token) VALUES (?, ?)',
-          [email, unsubscribeToken]
-        );
-        added++;
-      }
-    }
-
-    res.status(201).json({
-      message: 'Import abgeschlossen',
-      hinzugefügt: added,
-      reaktiviert: reactivated,
-      übersprungen: skipped
-    });
-
-  } catch (error) {
-    console.error('Fehler beim Import:', error);
-    res.status(500).json({ error: 'Serverfehler beim Importieren' });
-  }
-},
-
-  sendNewsletter: async (newsletterId) => {
+  sendNewsletter: async (req, res) => {
     try {
+      // Nur admin darf versenden
+      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
+        return res.status(403).json({ error: 'Nur Administratoren dürfen Newsletter versenden.' });
+      }
+
+      const { newsletterId } = req.body;
+      if (!newsletterId) {
+        return res.status(400).json({ error: 'newsletterId ist erforderlich' });
+      }
+
+      // Newsletter und Sections laden
       const [[newsletter]] = await pool.query('SELECT * FROM newsletter WHERE id = ?', [newsletterId]);
-      if (!newsletter) throw new Error('Newsletter nicht gefunden');
-  
-      const [sections] = await pool.query('SELECT subtitle, text FROM newsletter_sections WHERE newsletter_id = ?', [newsletterId]);
-  
-      // Alle aktiven Subscriber mit Token laden
-      const [subscribers] = await pool.query('SELECT email, unsubscribe_token FROM newsletter_subscribers WHERE unsubscribed_at IS NULL');
-  
-      let html = `
-        <html>
-        <head>
-          <style>
-            body {
-              font-family: 'Arial', sans-serif;
-              background-color: #f4f4f4;
-              margin: 0;
-              padding: 0;
-            }
-            .container {
-              width: 100%;
-              max-width: 600px;
-              margin: 0 auto;
-              background-color: #ffffff;
-              border-radius: 8px;
-              overflow: hidden;
-            }
-            .header {
-              background-color: #0056b3;
-              color: white;
-              padding: 20px;
-              text-align: center;
-            }
-            .header h1 {
-              margin: 0;
-              font-size: 28px;
-            }
-            .section {
-              padding: 20px;
-              border-bottom: 1px solid #f1f1f1;
-            }
-            .section h3 {
-              font-size: 20px;
-              color: #333333;
-              margin-bottom: 10px;
-            }
-            .section p {
-              font-size: 16px;
-              color: #555555;
-              line-height: 1.6;
-            }
-            .footer {
-              text-align: center;
-              font-size: 12px;
-              color: #888888;
-              padding: 10px;
-              background-color: #f1f1f1;
-            }
-            .unsubscribe {
-              color: #0056b3;
-              text-decoration: none;
-              font-size: 14px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>${newsletter.title}</h1>
-            </div>
-            ${sections.map(section => `
-              <div class="section">
-                <h3>${section.subtitle}</h3>
-                <p>${section.text}</p>
-              </div>
-            `).join('')}
-            <div class="footer">
-              <p>© ${new Date().getFullYear()} TBS Solutions GmbH</p>
-              <p><a href="https://tbsdigitalsolutionsbackend.onrender.com/api/newsletter/unsubscribe?token={{unsubscribe_token}}" class="unsubscribe">Vom Newsletter abmelden</a></p>
-            </div>
-          </div>
-        </body>
-        </html>
+      if (!newsletter) return res.status(404).json({ error: 'Newsletter nicht gefunden' });
+
+      const [sections] = await pool.query('SELECT subtitle, image, text FROM newsletter_sections WHERE newsletter_id = ?', [newsletterId]);
+
+      // Alle aktiven Abonnenten
+      const [subscribers] = await pool.query('SELECT vorname, email FROM newsletter_subscribers WHERE unsubscribed_at IS NULL');
+
+      // Mailtext aufbauen (einfaches HTML)
+      let htmlContent = `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h1>${newsletter.title}</h1>
       `;
-  
+      for (const sec of sections) {
+        htmlContent += `<h2>${sec.subtitle}</h2>`;
+        if (sec.image) {
+          htmlContent += `<img src="${sec.image}" alt="${sec.subtitle}" style="max-width:400px; height:auto; display:block; margin-bottom:15px;">`;
+        }
+        if (sec.text) {
+          htmlContent += `<p>${sec.text}</p>`;
+        }
+      }
+      htmlContent += `<hr><p>© ${new Date().getFullYear()} Jugendverein</p></div>`;
+
+      // Parallel Mail an alle senden (Achtung: bei großen Listen sollte man evtl. batchen oder Queue verwenden)
       for (const subscriber of subscribers) {
-        const htmlWithUnsubscribe = html.replace("{{unsubscribe_token}}", subscriber.unsubscribe_token);
-  
         await transporter.sendMail({
-          from: '"TBS Solutions" <tbs-solutions@gmx.net>',
+          from: '"Jugendverein" <newsletter@jugendverein.de>',
           to: subscriber.email,
-          subject: `Newsletter: ${newsletter.title}`,
-          html: htmlWithUnsubscribe,
+          subject: newsletter.title,
+          html: htmlContent.replace(/{{vorname}}/g, subscriber.vorname || ''),
         });
       }
-  
-      console.log(`Newsletter ${newsletterId} wurde an ${subscribers.length} Empfänger versandt.`);
-      return true;
+
+      res.json({ message: 'Newsletter wurde erfolgreich versendet!' });
     } catch (error) {
-      console.error(error);
-      return false;
+      console.error('Fehler beim Versenden des Newsletters:', error);
+      res.status(500).json({ error: 'Serverfehler beim Versenden des Newsletters' });
     }
   },
-  
-};
 
-cron.schedule('* * * * *', async () => {  // jede Minute prüfen
+  // Import-Funktion zum Einlesen von Subscriber-Daten aus CSV oder JSON (z.B.)
+  importSubscribers: async (req, res) => {
     try {
-      // Aktuelle Zeit in Europe/Berlin mit Sekunden=0
-      const nowBerlin = DateTime.now().setZone('Europe/Berlin').startOf('minute');
-  
-      // 1 Minute später
-      const nextBerlin = nowBerlin.plus({ minutes: 1 });
-  
-      // SQL-Datumsstrings im richtigen Format
-      const startStr = nowBerlin.toFormat('yyyy-LL-dd HH:mm:ss');     // z.B. '2025-07-02 11:35:00'
-      const endStr = nextBerlin.toFormat('yyyy-LL-dd HH:mm:ss');      // z.B. '2025-07-02 11:36:00'
-  
-      // Newsletter mit send_date in der Minute holen
-      const [pending] = await pool.query(
-        'SELECT * FROM newsletter WHERE send_date >= ? AND send_date < ? AND sent IS NULL',
-        [startStr, endStr]
-      );
-  
-      for (const nl of pending) {
-        const success = await newsletterController.sendNewsletter(nl.id);
-        if (success) {
-            await pool.query('UPDATE newsletter SET sent = TRUE WHERE id = ?', [nl.id]);
-        }
+      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
+        return res.status(403).json({ error: 'Nur Administratoren dürfen Abonnenten importieren.' });
       }
-    } catch (err) {
-      console.error('Fehler im Cronjob für Newsletter:', err);
+
+      // Annahme: req.body.subscribers ist ein Array von Objekten mit vorname, nachname, email
+      const { subscribers } = req.body;
+      if (!subscribers || !Array.isArray(subscribers) || subscribers.length === 0) {
+        return res.status(400).json({ error: 'Keine Abonnenten zum Importieren übergeben.' });
+      }
+
+      let importedCount = 0;
+
+      for (const sub of subscribers) {
+        const { vorname, nachname, email } = sub;
+        if (!vorname || !nachname || !email) continue;
+
+        // Prüfen, ob bereits vorhanden
+        const [[existing]] = await pool.query('SELECT * FROM newsletter_subscribers WHERE email = ?', [email]);
+        if (existing) {
+          // Update ggf. oder überspringen
+          if (existing.unsubscribed_at !== null) {
+            await pool.query('UPDATE newsletter_subscribers SET unsubscribed_at = NULL, subscribed_at = NOW(), vorname = ?, nachname = ?, newsletter_optin = 1 WHERE email = ?', [vorname, nachname, email]);
+            importedCount++;
+          }
+          continue;
+        }
+
+        // Neu anlegen
+        const unsubscribeToken = crypto.randomBytes(20).toString('hex');
+        await pool.query(
+          'INSERT INTO newsletter_subscribers (vorname, nachname, email, unsubscribe_token, newsletter_optin) VALUES (?, ?, ?, ?, 1)',
+          [vorname, nachname, email, unsubscribeToken]
+        );
+        importedCount++;
+      }
+
+      res.json({ message: `${importedCount} Abonnenten erfolgreich importiert.` });
+    } catch (error) {
+      console.error('Fehler beim Importieren der Abonnenten:', error);
+      res.status(500).json({ error: 'Serverfehler beim Importieren' });
     }
-  });
-  
+  },
+};
 
 module.exports = newsletterController;
