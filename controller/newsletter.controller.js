@@ -41,27 +41,27 @@ const newsletterController = {
       if (req.user.userType !== 'admin') {
         return res.status(403).json({ error: 'Nur Admin darf Newsletter erstellen' });
       }
-
+  
       const { title, sections, send_date } = req.body;
-
+  
       if (!title || !sections || !send_date) {
         return res.status(400).json({ error: 'title, sections, send_date erforderlich' });
       }
       if (!Array.isArray(sections) || sections.length === 0) {
         return res.status(400).json({ error: 'sections muss ein nicht-leeres Array sein' });
       }
-
-      // Newsletter in DB einfügen (ohne HTML-Content, nur Grunddaten)
+  
+      // Newsletter in DB einfügen (nur Grunddaten)
       const [result] = await pool.query(
         'INSERT INTO newsletter (title, send_date) VALUES (?, ?)',
         [title, send_date]
       );
       const newsletterId = result.insertId;
-
+  
       // Sections speichern
       for (const section of sections) {
         const { subtitle, text, foto } = section;
-
+  
         let base64Foto = null;
         if (foto) {
           // Base64 Bild mit data:image/... prefix validieren
@@ -69,38 +69,39 @@ const newsletterController = {
           if (!matches || matches.length !== 3) {
             return res.status(400).json({ error: 'Ungültiges Bildformat. Erwartet Base64 mit data:image/... prefix.' });
           }
-
+  
           const mimeType = matches[1];
           const base64Data = matches[2];
-
+  
           // Erlaubte Formate prüfen
           if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
             return res.status(400).json({ error: 'Nur PNG, JPEG, JPG oder WEBP sind erlaubt.' });
           }
-
+  
           const buffer = Buffer.from(base64Data, 'base64');
-
+  
           // Bild mit sharp auf max 400x400 skalieren, PNG formatieren
           const convertedBuffer = await sharp(buffer)
             .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
             .png()
             .toBuffer();
-
+  
           base64Foto = 'data:image/png;base64,' + convertedBuffer.toString('base64');
         }
-
+  
         await pool.query(
-          'INSERT INTO newsletter_sections (newsletter_id, subtitle, text, image) VALUES (?, ?, ?, ?)',
-          [newsletterId, subtitle || '', text || '', base64Foto || '']
+          'INSERT INTO newsletter_sections (newsletter_id, subtitle, image, text) VALUES (?, ?, ?, ?)',
+          [newsletterId, subtitle || '', base64Foto || '', text || '']
         );
       }
-
+  
       res.status(201).json({ message: 'Newsletter wurde erfolgreich erstellt!', newsletterId });
     } catch (error) {
       console.error('Fehler beim Erstellen des Newsletters:', error);
       res.status(500).json({ error: 'Interner Serverfehler' });
     }
   },
+  
   getAllSubscribers: async (req, res) => {
     try {
       if (req.user.userType !== 'admin') {
