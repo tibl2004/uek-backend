@@ -164,9 +164,9 @@ const vorstandController = {
 
   getMyProfile: async (req, res) => {
     try {
-      const { id, benutzername } = req.user;
+      const { id, benutzername, userType } = req.user;
   
-      // 1. Immer zuerst prüfen, ob der User im Vorstand ist (egal ob admin oder nicht)
+      // 1. Prüfen, ob der User im Vorstand ist (egal ob admin oder nicht)
       const [rows] = await pool.query(
         `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
          FROM vorstand WHERE id = ? OR benutzername = ?`,
@@ -191,19 +191,40 @@ const vorstandController = {
         });
       }
   
-      // 2. Wenn kein Vorstandseintrag vorhanden ist, gib nur Basisdaten zurück
+      // 2. Kein Vorstandseintrag — trotzdem Profil des Users zurückgeben
+      // Hier ggf. weitere Daten aus anderer Tabelle (z.B. admins, mitarbeiter) holen
+      // Beispiel: Tabelle 'admins' abfragen
+      if (userType === 'admin') {
+        const [adminRows] = await pool.query(
+          `SELECT id, benutzername, email, foto FROM admins WHERE id = ? OR benutzername = ?`,
+          [id, benutzername]
+        );
+        if (adminRows.length > 0) {
+          const a = adminRows[0];
+          return res.status(200).json({
+            id: a.id,
+            benutzername: a.benutzername,
+            email: a.email,
+            foto: a.foto || null,
+            istImVorstand: false
+          });
+        }
+      }
+  
+      // Wenn kein Eintrag in Vorstand oder admins, dann nur Basisdaten zurückgeben
       return res.status(200).json({
         id,
         benutzername,
         istImVorstand: false,
-        message: "Benutzer ist nicht im Vorstand eingetragen."
+        message: "Benutzerprofil (Basisdaten)."
       });
   
     } catch (error) {
       console.error('Fehler beim Abrufen des Profils:', error);
       res.status(500).json({ error: 'Fehler beim Abrufen des Profils.' });
     }
-  },  
+  },
+  
 
   updateMyProfile: async (req, res) => {
     try {
