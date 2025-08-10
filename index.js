@@ -21,6 +21,7 @@ const loginRouter = require('./routes/login.router');
 const vorstandRouter = require('./routes/vorstand.router');
 const youtubelinkRouter = require('./routes/youtubelink.router');
 const eventRouter = require('./routes/event.router');
+const newsletterRouter = require('./routes/newsletter.router');
 
 
 
@@ -31,6 +32,7 @@ app.use('/api/login', loginRouter);
 app.use('/api/vorstand', vorstandRouter);
 app.use('/api/youtubelink', youtubelinkRouter);
 app.use('/api/event', eventRouter);
+app.use('/api/newsletter', newsletterRouter);
 
 
 
