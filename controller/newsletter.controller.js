@@ -60,7 +60,7 @@ const newsletterController = {
 
       // Sections speichern
       for (const section of sections) {
-        const { subtitle, text, foto, link } = section;
+        const { subtitle, text, foto } = section;
 
         let base64Foto = null;
         if (foto) {
@@ -90,8 +90,8 @@ const newsletterController = {
         }
 
         await pool.query(
-          'INSERT INTO newsletter_sections (newsletter_id, subtitle, text, image, link) VALUES (?, ?, ?, ?, ?)',
-          [newsletterId, subtitle || '', text || '', base64Foto || '', link || '']
+          'INSERT INTO newsletter_sections (newsletter_id, subtitle, text, image) VALUES (?, ?, ?, ?)',
+          [newsletterId, subtitle || '', text || '', base64Foto || '']
         );
       }
 
@@ -101,7 +101,6 @@ const newsletterController = {
       res.status(500).json({ error: 'Interner Serverfehler' });
     }
   },
-
   getAllSubscribers: async (req, res) => {
     try {
       if (req.user.userType !== 'admin') {
