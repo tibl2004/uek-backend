@@ -18,6 +18,9 @@ router.get('/:id', newsletterController.getById);
 router.post('/subscribe', newsletterController.subscribe);
 
 // Newsletter abbestellen (kein Token nötig)
+router.get('/newsletter/unsubscribe', newsletterController.unsubscribe);
 
+router.post('/import', newsletterController.importSubscribers);
+  
 
 module.exports = router;
