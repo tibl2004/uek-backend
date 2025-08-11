@@ -335,34 +335,31 @@ const newsletterController = {
       res.status(500).json({ error: 'Serverfehler beim Versenden des Newsletters' });
     }
   },
-
   importSubscribers: async (req, res) => {
     try {
-      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
-        return res.status(403).json({ error: 'Nur Administratoren dürfen Abonnenten importieren.' });
-      }
-
+      // Kein Admin-Check mehr, jeder darf importieren
+  
       const { subscribers } = req.body;
       if (!Array.isArray(subscribers) || subscribers.length === 0) {
         return res.status(400).json({ error: 'Keine Abonnenten zum Importieren übergeben.' });
       }
-
+  
       const connection = await pool.getConnection();
       try {
         await connection.beginTransaction();
-
+  
         let importedCount = 0;
         let newSubs = [];
-
+  
         for (const sub of subscribers) {
           const { vorname, nachname, email } = sub;
           if (!vorname || !nachname || !email) continue;
-
+  
           const [[existing]] = await connection.query(
             'SELECT * FROM newsletter_subscribers WHERE email = ?',
             [email]
           );
-
+  
           if (existing) {
             if (existing.unsubscribed_at !== null) {
               await connection.query(
@@ -377,15 +374,14 @@ const newsletterController = {
             importedCount++;
           }
         }
-
-        // Falls neue Abonnenten gesammelt wurden → Multi-Insert
+  
         if (newSubs.length > 0) {
           await connection.query(
             'INSERT INTO newsletter_subscribers (vorname, nachname, email, unsubscribe_token, newsletter_optin) VALUES ?',
             [newSubs.map(s => [...s, 1])]
           );
         }
-
+  
         await connection.commit();
         res.json({ message: `${importedCount} Abonnenten erfolgreich importiert.` });
       } catch (err) {
@@ -399,6 +395,7 @@ const newsletterController = {
       res.status(500).json({ error: 'Serverfehler beim Importieren' });
     }
   }
+  
 };
 
 module.exports = newsletterController;
