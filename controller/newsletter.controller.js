@@ -336,51 +336,69 @@ const newsletterController = {
     }
   },
 
-  // Import-Funktion zum Einlesen von Subscriber-Daten aus CSV oder JSON (z.B.)
   importSubscribers: async (req, res) => {
     try {
       if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
         return res.status(403).json({ error: 'Nur Administratoren dürfen Abonnenten importieren.' });
       }
 
-      // Annahme: req.body.subscribers ist ein Array von Objekten mit vorname, nachname, email
       const { subscribers } = req.body;
-      if (!subscribers || !Array.isArray(subscribers) || subscribers.length === 0) {
+      if (!Array.isArray(subscribers) || subscribers.length === 0) {
         return res.status(400).json({ error: 'Keine Abonnenten zum Importieren übergeben.' });
       }
 
-      let importedCount = 0;
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
 
-      for (const sub of subscribers) {
-        const { vorname, nachname, email } = sub;
-        if (!vorname || !nachname || !email) continue;
+        let importedCount = 0;
+        let newSubs = [];
 
-        // Prüfen, ob bereits vorhanden
-        const [[existing]] = await pool.query('SELECT * FROM newsletter_subscribers WHERE email = ?', [email]);
-        if (existing) {
-          // Update ggf. oder überspringen
-          if (existing.unsubscribed_at !== null) {
-            await pool.query('UPDATE newsletter_subscribers SET unsubscribed_at = NULL, subscribed_at = NOW(), vorname = ?, nachname = ?, newsletter_optin = 1 WHERE email = ?', [vorname, nachname, email]);
+        for (const sub of subscribers) {
+          const { vorname, nachname, email } = sub;
+          if (!vorname || !nachname || !email) continue;
+
+          const [[existing]] = await connection.query(
+            'SELECT * FROM newsletter_subscribers WHERE email = ?',
+            [email]
+          );
+
+          if (existing) {
+            if (existing.unsubscribed_at !== null) {
+              await connection.query(
+                'UPDATE newsletter_subscribers SET unsubscribed_at = NULL, subscribed_at = NOW(), vorname = ?, nachname = ?, newsletter_optin = 1 WHERE email = ?',
+                [vorname, nachname, email]
+              );
+              importedCount++;
+            }
+          } else {
+            const unsubscribeToken = crypto.randomBytes(20).toString('hex');
+            newSubs.push([vorname, nachname, email, unsubscribeToken]);
             importedCount++;
           }
-          continue;
         }
 
-        // Neu anlegen
-        const unsubscribeToken = crypto.randomBytes(20).toString('hex');
-        await pool.query(
-          'INSERT INTO newsletter_subscribers (vorname, nachname, email, unsubscribe_token, newsletter_optin) VALUES (?, ?, ?, ?, 1)',
-          [vorname, nachname, email, unsubscribeToken]
-        );
-        importedCount++;
-      }
+        // Falls neue Abonnenten gesammelt wurden → Multi-Insert
+        if (newSubs.length > 0) {
+          await connection.query(
+            'INSERT INTO newsletter_subscribers (vorname, nachname, email, unsubscribe_token, newsletter_optin) VALUES ?',
+            [newSubs.map(s => [...s, 1])]
+          );
+        }
 
-      res.json({ message: `${importedCount} Abonnenten erfolgreich importiert.` });
+        await connection.commit();
+        res.json({ message: `${importedCount} Abonnenten erfolgreich importiert.` });
+      } catch (err) {
+        await connection.rollback();
+        throw err;
+      } finally {
+        connection.release();
+      }
     } catch (error) {
       console.error('Fehler beim Importieren der Abonnenten:', error);
       res.status(500).json({ error: 'Serverfehler beim Importieren' });
     }
-  },
+  }
 };
 
 module.exports = newsletterController;
