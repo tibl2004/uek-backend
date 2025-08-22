@@ -9,7 +9,7 @@ const authenticate = impressumController.authenticateToken;
 router.get("/", impressumController.getImpressum);
 
 // Route: Neues Impressum erstellen (nur Vorstand)
-router.post("/", authenticate, impressumController.createImpressum);
+router.post("/", authenticate, impressumController.create);
 
 // Route: Bestehendes Impressum aktualisieren (nur Vorstand)
 router.put("/update", authenticate, impressumController.updateImpressum);
