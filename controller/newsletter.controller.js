@@ -12,8 +12,8 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false,
   auth: {
-    user: 'tbs-solutions@gmx.net', // Ersetzen!
-    pass: 'Cocco2016?.',            // Ersetzen!
+    user: 'newsletter@jugehoerig.ch', // Ersetzen!
+    pass: '...',            // Ersetzen!
   },
 });
 
@@ -167,27 +167,76 @@ const newsletterController = {
       res.status(500).json({ error: 'Fehler beim Abrufen des Newsletters' });
     }
   },
-
   subscribe: async (req, res) => {
     try {
       const { vorname, nachname, email, newsletter_optin } = req.body;
-
+  
       // Pflichtfelder prüfen
       if (!vorname || !nachname || !email) {
         return res.status(400).json({ error: 'Vorname, Nachname und E-Mail sind erforderlich' });
       }
-
+  
       // Checkbox muss TRUE sein
       if (newsletter_optin !== true) {
         return res.status(400).json({ error: 'Newsletter-Opt-in muss bestätigt sein' });
       }
-
+  
+      // Einheitliches responsives HTML-Template mit Vereinsfarbe
+      const generateNewsletterEmail = (title, message, token) => `
+        <div style="margin:0; padding:0; background-color:#f4f4f4; font-family:Arial,sans-serif;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f4f4;">
+            <tr>
+              <td align="center" style="padding:20px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:white; border-radius:8px; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,0.1);">
+                  <!-- Header -->
+                  <tr>
+                    <td align="center" style="background:#F59422; padding:20px;">
+                      <h1 style="color:white; font-size:24px; margin:0;">Jugendverein e.V.</h1>
+                    </td>
+                  </tr>
+  
+                  <!-- Inhalt -->
+                  <tr>
+                    <td style="padding:20px;">
+                      <h2 style="color:#F59422; font-size:20px; margin-top:0;">${title}</h2>
+                      <p style="font-size:16px; line-height:1.5; color:#333; margin:0 0 15px 0;">
+                        ${message}
+                      </p>
+                      <p style="font-size:16px; line-height:1.5; color:#333;">
+                        Falls du den Newsletter nicht mehr erhalten möchtest, kannst du dich jederzeit hier abmelden:
+                      </p>
+                      <div style="text-align:center; margin:20px 0;">
+                        <a href="https://meinverein.de/api/newsletter/unsubscribe?token=${token}" 
+                          style="background:#F59422; color:white; text-decoration:none; padding:12px 18px; border-radius:5px; font-size:16px; display:inline-block;">
+                          Jetzt abmelden
+                        </a>
+                      </div>
+                      <p style="font-size:12px; color:#999; text-align:center;">
+                        Du erhältst diese E-Mail, weil du dich für den Newsletter angemeldet hast. Falls dies ein Irrtum war, ignoriere bitte diese Nachricht.
+                      </p>
+                    </td>
+                  </tr>
+  
+                  <!-- Footer -->
+                  <tr>
+                    <td style="background:#f4f4f4; padding:15px; text-align:center; font-size:12px; color:#777;">
+                      © ${new Date().getFullYear()} Jugendverein e.V. – Alle Rechte vorbehalten<br>
+                      Musterstraße 123, 12345 Musterstadt
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </div>
+      `;
+  
       // Prüfen, ob schon vorhanden
       const [[existing]] = await pool.query(
         'SELECT * FROM newsletter_subscribers WHERE email = ?',
         [email]
       );
-
+  
       if (existing) {
         if (existing.unsubscribed_at === null) {
           return res.status(400).json({ error: 'Diese E-Mail ist bereits angemeldet' });
@@ -198,57 +247,56 @@ const newsletterController = {
             'UPDATE newsletter_subscribers SET unsubscribed_at = NULL, subscribed_at = NOW(), unsubscribe_token = ?, vorname = ?, nachname = ?, newsletter_optin = 1 WHERE email = ?',
             [newToken, vorname, nachname, email]
           );
-
-          // Bestätigungsmail senden
+  
           await transporter.sendMail({
             from: '"Jugendverein" <newsletter@jugendverein.de>',
             to: email,
-            subject: 'Newsletter-Reaktivierung bestätigt',
-            html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9;">
-                <h2 style="color: #0056b3;">Willkommen zurück beim Newsletter unseres Vereins!</h2>
-                <p>Du hast dich erfolgreich erneut für unseren Newsletter angemeldet.</p>
-                <p>Wenn du dich abmelden möchtest, kannst du das jederzeit über folgenden Link tun:</p>
-                <a href="https://meinverein.de/api/newsletter/unsubscribe?token=${newToken}" style="color: #0056b3;">Vom Newsletter abmelden</a>
-                <p style="margin-top: 30px; font-size: 12px; color: #999;">© ${new Date().getFullYear()} Jugendverein – Alle Rechte vorbehalten</p>
-              </div>
-            `,
+            subject: 'Deine Newsletter-Reaktivierung war erfolgreich',
+            html: generateNewsletterEmail(
+              'Willkommen zurück!',
+              `Hallo ${vorname} ${nachname},<br><br>
+               schön, dass du wieder bei uns bist! Ab sofort erhältst du erneut unsere 
+               Vereinsnews, Veranstaltungshinweise und spannende Einblicke direkt per E-Mail.<br><br>
+               Wir freuen uns, dich wieder als Teil unserer Gemeinschaft zu haben.`,
+              newToken
+            ),
           });
-
+  
           return res.json({ message: 'Newsletter-Anmeldung reaktiviert' });
         }
       }
-
+  
       // Neue Anmeldung
       const unsubscribeToken = crypto.randomBytes(20).toString('hex');
       await pool.query(
         'INSERT INTO newsletter_subscribers (vorname, nachname, email, unsubscribe_token, newsletter_optin) VALUES (?, ?, ?, ?, 1)',
         [vorname, nachname, email, unsubscribeToken]
       );
-
-      // Bestätigungsmail
+  
       await transporter.sendMail({
         from: '"Jugendverein" <newsletter@jugendverein.de>',
         to: email,
-        subject: 'Newsletter-Anmeldung bestätigt',
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9;">
-            <h2 style="color: #0056b3;">Willkommen zum Newsletter unseres Vereins!</h2>
-            <p>Du hast dich erfolgreich für unseren Newsletter angemeldet.</p>
-            <p>Wenn du dich abmelden möchtest, kannst du das jederzeit über folgenden Link tun:</p>
-            <a href="https://meinverein.de/api/newsletter/unsubscribe?token=${unsubscribeToken}" style="color: #0056b3;">Vom Newsletter abmelden</a>
-            <p style="margin-top: 30px; font-size: 12px; color: #999;">© ${new Date().getFullYear()} Jugendverein – Alle Rechte vorbehalten</p>
-          </div>
-        `,
+        subject: 'Willkommen zu unserem Newsletter!',
+        html: generateNewsletterEmail(
+          'Willkommen im Jugendverein-Newsletter!',
+          `Hallo ${vorname} ${nachname},<br><br>
+           vielen Dank für deine Anmeldung zu unserem Newsletter.<br>
+           Ab sofort bist du immer bestens informiert über unsere Projekte, 
+           Veranstaltungen und exklusive Vereinsaktionen.<br><br>
+           Wir freuen uns, dich als Teil unserer Gemeinschaft zu begrüßen.`,
+          unsubscribeToken
+        ),
       });
-
+  
       res.json({ message: 'Newsletter-Anmeldung erfolgreich' });
+  
     } catch (error) {
       console.error('Fehler beim Newsletter-Anmelden:', error);
       res.status(500).json({ error: 'Serverfehler bei der Anmeldung' });
     }
   },
-
+  
+  
   unsubscribe: async (req, res) => {
     try {
       const { token } = req.query;
