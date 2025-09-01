@@ -78,9 +78,8 @@ const impressumController = {
   create: async (req, res) => {
     const { userTypes } = req.user;
     if (!userTypes || !userTypes.includes("vorstand")) {
-      return res.status(403).json({ error: "Nur Vorstände dürfen das Impressum aktualisieren." });
+      return res.status(403).json({ error: "Nur Vorstände dürfen das Impressum erstellen." });
     }
-  
   
     const { title, text, links, adresse } = req.body;
   
@@ -95,26 +94,31 @@ const impressumController = {
         return res.status(400).json({ error: "Ein Impressum existiert bereits. Bitte zuerst aktualisieren." });
       }
   
-      // Impressum speichern
+      // ✅ Impressum speichern inkl. Adresse
       const [result] = await pool.query(
-        "INSERT INTO impressum (title, text) VALUES (?, ?)",
-        [title, text]
+        "INSERT INTO impressum (title, text, adresse) VALUES (?, ?, ?)",
+        [title, text, adresse]
       );
       const impressumId = result.insertId;
   
       let savedLinks = [];
   
-      // 1️⃣ Adresse als erster Link
+      // 1️⃣ Adresse als Google Maps Link in impressum_links speichern
       const [adresseResult] = await pool.query(
         "INSERT INTO impressum_links (impressum_id, title, url, icon) VALUES (?, ?, ?, ?)",
-        [impressumId, "Adresse", `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, "MapPin"]
+        [
+          impressumId,
+          "Adresse",
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`,
+          "MapPin"
+        ]
       );
   
       savedLinks.push({
         id: adresseResult.insertId,
         title: "Adresse",
         url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`,
-        icon: "MapPin",
+        icon: "MapPin"
       });
   
       // 2️⃣ andere Links speichern
@@ -129,7 +133,7 @@ const impressumController = {
             id: linkResult.insertId,
             title: link.title,
             url: link.url,
-            icon: link.icon || null,
+            icon: link.icon || null
           });
         }
       }
@@ -140,15 +144,16 @@ const impressumController = {
           id: impressumId,
           title,
           text,
-          links: savedLinks,
-        },
+          adresse,       // ✅ Adresse wird in impressum gespeichert
+          links: savedLinks
+        }
       });
+  
     } catch (err) {
       console.error("Fehler beim Erstellen des Impressums:", err);
       return res.status(500).json({ error: "Fehler beim Erstellen des Impressums." });
     }
-  },
-  
+  },  
 
   getLinks: async (req, res) => {
     try {
