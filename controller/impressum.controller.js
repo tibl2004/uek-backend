@@ -105,17 +105,22 @@ const impressumController = {
       );
       const impressumId = result.insertId;
   
-      // Links speichern (inkl. Adresse als ein Link)
       let savedLinks = [];
   
       // 1️⃣ Adresse als erster Link
+      const [adresseResult] = await pool.query(
+        "INSERT INTO impressum_links (impressum_id, title, url, icon) VALUES (?, ?, ?, ?)",
+        [impressumId, "Adresse", `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, "MapPin"]
+      );
+  
       savedLinks.push({
+        id: adresseResult.insertId,
         title: "Adresse",
         url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`,
-        icon: "MapPin", // beliebiger Icon-Name für die Adresse
+        icon: "MapPin",
       });
   
-      // 2️⃣ alle anderen Links
+      // 2️⃣ andere Links speichern
       if (Array.isArray(links) && links.length > 0) {
         for (const link of links) {
           const [linkResult] = await pool.query(
@@ -145,7 +150,7 @@ const impressumController = {
       console.error("Fehler beim Erstellen des Impressums:", err);
       return res.status(500).json({ error: "Fehler beim Erstellen des Impressums." });
     }
-  },  
+  },
   
 
   getLinks: async (req, res) => {
