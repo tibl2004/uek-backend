@@ -23,6 +23,7 @@ const youtubelinkRouter = require('./routes/youtubelink.router');
 const eventRouter = require('./routes/event.router');
 const newsletterRouter = require('./routes/newsletter.router');
 const impressumRouter = require('./routes/impressum.router');
+const homeRouter = require('./routes/home.router');
 
 
 
@@ -35,6 +36,7 @@ app.use('/api/youtubelink', youtubelinkRouter);
 app.use('/api/event', eventRouter);
 app.use('/api/newsletter', newsletterRouter);
 app.use('/api/impressum', impressumRouter);
+app.use('/api/home', homeRouter);
 
 
 
