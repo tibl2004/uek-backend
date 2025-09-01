@@ -18,26 +18,22 @@ const impressumController = {
  
 
   updateImpressum: async (req, res) => {
-    const { userType } = req.user;
-    if (userType !== "vorstand")
-      return res
-        .status(403)
-        .json({ error: "Nur Vorstände dürfen das Impressum aktualisieren." });
-
+    const { userTypes } = req.user;
+    if (!userTypes || !userTypes.includes("vorstand")) {
+      return res.status(403).json({ error: "Nur Vorstände dürfen das Impressum aktualisieren." });
+    }
+  
     const { title, text, adresse } = req.body;
-    if (!title || !text || !adresse)
-      return res
-        .status(400)
-        .json({ error: "Titel, Text und Adresse sind Pflichtfelder." });
-
+    if (!title || !text || !adresse) {
+      return res.status(400).json({ error: "Titel, Text und Adresse sind Pflichtfelder." });
+    }
+  
     try {
       const [existing] = await pool.query("SELECT * FROM impressum LIMIT 1");
       if (existing.length === 0) {
-        return res
-          .status(404)
-          .json({ error: "Kein Impressum vorhanden. Bitte zuerst erstellen." });
+        return res.status(404).json({ error: "Kein Impressum vorhanden. Bitte zuerst erstellen." });
       }
-
+  
       const updateSql =
         "UPDATE impressum SET title=?, text=?, adresse=? WHERE id=?";
       await pool.query(updateSql, [title, text, adresse, existing[0].id]);
@@ -48,7 +44,7 @@ const impressumController = {
         .status(500)
         .json({ error: "Fehler beim Aktualisieren des Impressums." });
     }
-  },
+  },  
 
   getImpressum: async (req, res) => {
     try {
@@ -80,10 +76,11 @@ const impressumController = {
   },
 
   create: async (req, res) => {
-    const { userType } = req.user;
-    if (userType !== "vorstand") {
-      return res.status(403).json({ error: "Nur Vorstände dürfen ein Impressum erstellen." });
+    const { userTypes } = req.user;
+    if (!userTypes || !userTypes.includes("vorstand")) {
+      return res.status(403).json({ error: "Nur Vorstände dürfen das Impressum aktualisieren." });
     }
+  
   
     const { title, text, links, adresse } = req.body;
   
