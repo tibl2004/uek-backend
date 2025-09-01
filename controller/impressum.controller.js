@@ -98,43 +98,47 @@ const impressumController = {
         return res.status(400).json({ error: "Ein Impressum existiert bereits. Bitte zuerst aktualisieren." });
       }
   
-      // Impressum einfügen
-      const insertSql = "INSERT INTO impressum (title, text, adresse) VALUES (?, ?, ?)";
-      const [result] = await pool.query(insertSql, [title, text, adresse]);
+      // Impressum speichern
+      const [result] = await pool.query(
+        "INSERT INTO impressum (title, text, adresse) VALUES (?, ?, ?)",
+        [title, text, adresse]
+      );
       const impressumId = result.insertId;
   
-      // Links einfügen (inkl. optional Bild)
+      // Links speichern (einfach mit icon als Text)
+      let savedLinks = [];
       if (Array.isArray(links) && links.length > 0) {
         for (const link of links) {
-          let iconPath = null;
-  
-          // Falls ein Bild im Base64-Format mitgeschickt wurde
-          if (link.icon && link.icon.startsWith("data:image")) {
-            const base64Data = link.icon.replace(/^data:image\/\w+;base64,/, "");
-            const buffer = Buffer.from(base64Data, "base64");
-  
-            const fileName = `icon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`;
-            const filePath = path.join(uploadDir, fileName);
-  
-            // Mit sharp zu PNG optimieren
-            await sharp(buffer).png().toFile(filePath);
-  
-            iconPath = `/uploads/icons/${fileName}`; // URL fürs Frontend
-          }
-  
-          await pool.query(
+          const [linkResult] = await pool.query(
             "INSERT INTO impressum_links (impressum_id, title, url, icon) VALUES (?, ?, ?, ?)",
-            [impressumId, link.title, link.url, iconPath]
+            [impressumId, link.title, link.url, link.icon || null]
           );
+  
+          savedLinks.push({
+            id: linkResult.insertId,
+            title: link.title,
+            url: link.url,
+            icon: link.icon || null,
+          });
         }
       }
   
-      return res.status(201).json({ message: "Impressum inkl. Links und Icons erfolgreich erstellt." });
+      return res.status(201).json({
+        message: "Impressum inkl. Links erfolgreich erstellt.",
+        impressum: {
+          id: impressumId,
+          title,
+          text,
+          adresse,
+          links: savedLinks,
+        },
+      });
     } catch (err) {
       console.error("Fehler beim Erstellen des Impressums:", err);
-      return res.status(500).json({ error: "Fehler beim Erstellen des Impressums mit Links." });
+      return res.status(500).json({ error: "Fehler beim Erstellen des Impressums." });
     }
   },
+  
   
 
   getLinks: async (req, res) => {
