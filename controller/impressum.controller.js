@@ -85,7 +85,7 @@ const impressumController = {
       return res.status(403).json({ error: "Nur Vorstände dürfen ein Impressum erstellen." });
     }
   
-    const { title, text, adresse, links } = req.body;
+    const { title, text, links, adresse } = req.body;
   
     if (!title || !text || !adresse) {
       return res.status(400).json({ error: "Titel, Text und Adresse sind Pflichtfelder." });
@@ -100,13 +100,22 @@ const impressumController = {
   
       // Impressum speichern
       const [result] = await pool.query(
-        "INSERT INTO impressum (title, text, adresse) VALUES (?, ?, ?)",
-        [title, text, adresse]
+        "INSERT INTO impressum (title, text) VALUES (?, ?)",
+        [title, text]
       );
       const impressumId = result.insertId;
   
-      // Links speichern (einfach mit icon als Text)
+      // Links speichern (inkl. Adresse als ein Link)
       let savedLinks = [];
+  
+      // 1️⃣ Adresse als erster Link
+      savedLinks.push({
+        title: "Adresse",
+        url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`,
+        icon: "MapPin", // beliebiger Icon-Name für die Adresse
+      });
+  
+      // 2️⃣ alle anderen Links
       if (Array.isArray(links) && links.length > 0) {
         for (const link of links) {
           const [linkResult] = await pool.query(
@@ -129,7 +138,6 @@ const impressumController = {
           id: impressumId,
           title,
           text,
-          adresse,
           links: savedLinks,
         },
       });
@@ -137,8 +145,7 @@ const impressumController = {
       console.error("Fehler beim Erstellen des Impressums:", err);
       return res.status(500).json({ error: "Fehler beim Erstellen des Impressums." });
     }
-  },
-  
+  },  
   
 
   getLinks: async (req, res) => {
