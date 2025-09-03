@@ -15,12 +15,12 @@ const eventController = {
     });
   },
 
+
   createEvent: async (req, res) => {
-    let connection; // Verbindung hier deklarieren, damit try/catch/finally Zugriff hat
+    let connection;
     try {
       const { userTypes } = req.user;
   
-      // Rollenprüfung
       if (!userTypes || !userTypes.includes("vorstand")) {
         return res.status(403).json({ error: "Nur Vorstände dürfen Events erstellen." });
       }
@@ -37,28 +37,36 @@ const eventController = {
         supporter,
         bildtitel,
         preise,
-        bild // Bild als Base64 im Body
+        bild // Base64
       } = req.body;
   
-      // Pflichtfelder prüfen
       if (!titel || !beschreibung || !ort || !von || !bis) {
         connection.release();
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
   
-      // Bild prüfen
       let bildBase64 = null;
       if (bild) {
-        if (!bild.startsWith("data:image/png;base64,")) {
+        if (!bild.startsWith("data:image")) {
           connection.release();
-          return res.status(400).json({ error: "Bild muss als PNG-Base64 mit Prefix gesendet werden." });
+          return res.status(400).json({ error: "Bild muss als Base64 mit Prefix gesendet werden." });
         }
-        bildBase64 = bild;
+  
+        // Base64 in Buffer konvertieren
+        const base64Data = bild.replace(/^data:image\/\w+;base64,/, "");
+        const imgBuffer = Buffer.from(base64Data, "base64");
+  
+        // Bild mit sharp verkleinern (max Breite 800px, Qualität 80%)
+        const resizedBuffer = await sharp(imgBuffer)
+          .resize({ width: 800, withoutEnlargement: true })
+          .png({ quality: 80 })
+          .toBuffer();
+  
+        bildBase64 = `data:image/png;base64,${resizedBuffer.toString("base64")}`;
       }
   
       await connection.beginTransaction();
   
-      // Event speichern
       const [eventResult] = await connection.query(
         `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -77,7 +85,6 @@ const eventController = {
   
       const eventId = eventResult.insertId;
   
-      // Preise speichern
       if (Array.isArray(preise) && preise.length > 0) {
         const preisWerte = preise
           .filter(p => p.preisbeschreibung && p.kosten != null)
@@ -92,13 +99,10 @@ const eventController = {
       }
   
       await connection.commit();
-  
       res.status(201).json({ message: "Event erfolgreich erstellt." });
     } catch (error) {
       if (connection) {
-        try {
-          await connection.rollback();
-        } catch {}
+        try { await connection.rollback(); } catch {}
         connection.release();
       }
       console.error("Fehler beim Erstellen des Events:", error);
@@ -106,7 +110,8 @@ const eventController = {
     } finally {
       if (connection) connection.release();
     }
-  },
+  };
+  
   
   
   getEvents: async (req, res) => {
