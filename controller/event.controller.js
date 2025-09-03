@@ -110,7 +110,7 @@ const eventController = {
     } finally {
       if (connection) connection.release();
     }
-  };
+  },
   
   
   
