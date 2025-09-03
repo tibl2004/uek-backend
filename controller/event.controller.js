@@ -32,25 +32,24 @@ const eventController = {
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
 
-      let bildBase64 = null;
+      let base64Foto = null;
       if (bild) {
-        if (!bild.startsWith("data:image")) {
-          connection.release();
-          return res.status(400).json({ error: "Bild muss als Base64 mit Prefix gesendet werden." });
+        const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+          return res.status(400).json({ error: 'Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix.' });
         }
 
-        // Base64 → Buffer
-        const base64Data = bild.replace(/^data:image\/\w+;base64,/, "");
-        const imgBuffer = Buffer.from(base64Data, "base64");
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
 
-        // Sharp: in PNG konvertieren, max. 800x800px, Qualität optimiert
-        const resizedBuffer = await sharp(imgBuffer)
-          .resize({ width: 800, height: 800, fit: "inside" }) // Maximal 800x800, Seitenverhältnis bleibt
-          .png({ compressionLevel: 8, adaptiveFiltering: true }) // PNG-Kompression
-          .toBuffer();
+        // Optional: nur bestimmte Formate zulassen
+        if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
+          return res.status(400).json({ error: 'Nur PNG, JPEG, JPG oder WEBP erlaubt.' });
+        }
 
-        // Base64 erzeugen
-        bildBase64 = `data:image/png;base64,${resizedBuffer.toString("base64")}`;
+        const convertedBuffer = await sharp(buffer).resize(400).png().toBuffer();
+        base64Foto = convertedBuffer.toString('base64'); // Reines Base64 ohne Prefix
       }
 
       await connection.beginTransaction();
