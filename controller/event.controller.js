@@ -17,11 +17,10 @@ const eventController = {
 
   createEvent: async (req, res) => {
     try {
-      // Prüfen, ob User Rolle vorstand oder admin ist
-      if (!req.user || !['admin', 'vorstand'].includes(req.user.rolle)) {
-        return res.status(403).json({ error: "Nur Vorstand oder Admin dürfen Events erstellen." });
-      }
-  
+      const { userTypes } = req.user;
+    if (!userTypes || !userTypes.includes("vorstand")) {
+      return res.status(403).json({ error: "Nur Vorstände dürfen das Impressum aktualisieren." });
+    }
       const connection = await pool.getConnection();
       const {
         titel,
