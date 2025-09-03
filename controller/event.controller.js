@@ -16,12 +16,17 @@ const eventController = {
   },
 
   createEvent: async (req, res) => {
+    let connection; // Verbindung hier deklarieren, damit try/catch/finally Zugriff hat
     try {
       const { userTypes } = req.user;
-    if (!userTypes || !userTypes.includes("vorstand")) {
-      return res.status(403).json({ error: "Nur Vorstände dürfen das Impressum aktualisieren." });
-    }
-      const connection = await pool.getConnection();
+  
+      // Rollenprüfung
+      if (!userTypes || !userTypes.includes("vorstand")) {
+        return res.status(403).json({ error: "Nur Vorstände dürfen Events erstellen." });
+      }
+  
+      connection = await pool.getConnection();
+  
       const {
         titel,
         beschreibung,
@@ -31,40 +36,48 @@ const eventController = {
         alle,
         supporter,
         bildtitel,
-        preise
+        preise,
+        bild // Bild als Base64 im Body
       } = req.body;
   
+      // Pflichtfelder prüfen
       if (!titel || !beschreibung || !ort || !von || !bis) {
         connection.release();
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
   
+      // Bild prüfen
       let bildBase64 = null;
-  
-      if (req.file) {
-        const pngBuffer = await sharp(req.file.buffer).png().toBuffer();
-        bildBase64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
-      } else if (req.body.bild && req.body.bild.startsWith("data:image/png;base64,")) {
-        bildBase64 = req.body.bild;
-      } else if (req.body.bild) {
-        connection.release();
-        return res.status(400).json({ error: "Bild muss hochgeladen oder als PNG-Base64 mit Prefix gesendet werden." });
+      if (bild) {
+        if (!bild.startsWith("data:image/png;base64,")) {
+          connection.release();
+          return res.status(400).json({ error: "Bild muss als PNG-Base64 mit Prefix gesendet werden." });
+        }
+        bildBase64 = bild;
       }
   
       await connection.beginTransaction();
   
+      // Event speichern
       const [eventResult] = await connection.query(
         `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          titel, beschreibung, ort, von, bis,
-          bildBase64, bildtitel || null,
-          supporter || null, alle ? 1 : 0
+          titel,
+          beschreibung,
+          ort,
+          von,
+          bis,
+          bildBase64,
+          bildtitel || null,
+          supporter || null,
+          alle ? 1 : 0
         ]
       );
   
       const eventId = eventResult.insertId;
   
+      // Preise speichern
       if (Array.isArray(preise) && preise.length > 0) {
         const preisWerte = preise
           .filter(p => p.preisbeschreibung && p.kosten != null)
@@ -79,17 +92,22 @@ const eventController = {
       }
   
       await connection.commit();
-      connection.release();
   
       res.status(201).json({ message: "Event erfolgreich erstellt." });
     } catch (error) {
-      if (connection) await connection.rollback();
-      if (connection) connection.release();
-  
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch {}
+        connection.release();
+      }
       console.error("Fehler beim Erstellen des Events:", error);
       res.status(500).json({ error: "Fehler beim Erstellen des Events." });
+    } finally {
+      if (connection) connection.release();
     }
   },
+  
   
   getEvents: async (req, res) => {
     try {

@@ -1,31 +1,34 @@
-const express = require('express');
-const multer = require('multer');
-const eventController = require('../controller/event.controller');
+// routes/eventRoutes.js
+const express = require("express");
+const eventController = require("../controller/event.controller");
 
 const router = express.Router();
-const upload = multer(); // Speicher im RAM (keine Speicherung auf Festplatte)
 
+// Alle Events abrufen
+router.get("/", eventController.getEvents);
 
-// Alle Events holen (öffentlich, ohne Auth? Falls ja, Middleware hier entfernen)
-router.get('/', eventController.getEvents);
+// Einzelnes Event abrufen
+router.get("/:id", eventController.getEventById);
 
-// Event nach ID holen
-router.get('/:id', eventController.getEventById);
-
-// Auth Middleware wird überall verwendet, außer beim GET (je nach Use Case anpassen)
-router.use(eventController.authenticateToken);
-
-// Event erstellen mit Bild-Upload
+// Neues Event erstellen (nur Vorstände, Bild per Base64 im Body)
 router.post(
-    "/",
-    eventController.authenticateToken,
-    eventController.createEvent
-  );
+  "/",
+  eventController.authenticateToken,
+  eventController.createEvent
+);
 
-// Event updaten mit optionalem Bild-Upload (Admin only im Controller geprüft)
-router.put('/:id', upload.single('bild'), eventController.updateEvent);
+// Event aktualisieren (nur Admins)
+router.put(
+  "/:id",
+  eventController.authenticateToken,
+  eventController.updateEvent
+);
 
-// Event löschen (Admin only im Controller geprüft)
-router.delete('/:id', eventController.deleteEvent);
+// Event löschen (nur Admins)
+router.delete(
+  "/:id",
+  eventController.authenticateToken,
+  eventController.deleteEvent
+);
 
 module.exports = router;
