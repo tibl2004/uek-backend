@@ -20,13 +20,11 @@ const eventController = {
     let connection;
     try {
       const { userTypes } = req.user;
-
       if (!userTypes || !userTypes.includes("vorstand")) {
         return res.status(403).json({ error: "Nur Vorstände dürfen Events erstellen." });
       }
 
       connection = await pool.getConnection();
-
       const { titel, beschreibung, ort, von, bis, alle, supporter, bildtitel, preise, bild } = req.body;
 
       if (!titel || !beschreibung || !ort || !von || !bis) {
@@ -45,12 +43,13 @@ const eventController = {
         const base64Data = bild.replace(/^data:image\/\w+;base64,/, "");
         const imgBuffer = Buffer.from(base64Data, "base64");
 
-        // Sharp: immer max. 800x800px, Qualität 80%
+        // Sharp: in PNG konvertieren, max. 800x800px, Qualität optimiert
         const resizedBuffer = await sharp(imgBuffer)
-          .resize({ width: 800, height: 800, fit: "inside" })
-          .png({ quality: 80 })
+          .resize({ width: 800, height: 800, fit: "inside" }) // Maximal 800x800, Seitenverhältnis bleibt
+          .png({ compressionLevel: 8, adaptiveFiltering: true }) // PNG-Kompression
           .toBuffer();
 
+        // Base64 erzeugen
         bildBase64 = `data:image/png;base64,${resizedBuffer.toString("base64")}`;
       }
 
@@ -90,7 +89,6 @@ const eventController = {
       if (connection) connection.release();
     }
   },
-  
   
   getEvents: async (req, res) => {
     try {
