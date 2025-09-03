@@ -16,8 +16,11 @@ router.get('/:id', eventController.getEventById);
 router.use(eventController.authenticateToken);
 
 // Event erstellen mit Bild-Upload
-router.post('/', upload.single('bild'), eventController.createEvent);
-
+router.post(
+    "/",
+    eventController.authenticateToken,
+    eventController.createEvent
+  );
 
 // Event updaten mit optionalem Bild-Upload (Admin only im Controller geprüft)
 router.put('/:id', upload.single('bild'), eventController.updateEvent);
