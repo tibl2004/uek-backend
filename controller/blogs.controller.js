@@ -26,50 +26,57 @@ const blogController = {
       ) {
         return res.status(403).json({ error: "Nur Benutzer mit Vorstandrechten dürfen einen Blog erstellen." });
       }
-
+  
       const { titel, inhalt, bilder } = req.body;
-
+  
       if (!titel || !inhalt) {
         return res.status(400).json({ error: "Titel und Inhalt müssen angegeben werden." });
       }
-
+  
       // Autor aus Token bestimmen
       const autor = `${req.user.vorname || ""} ${req.user.nachname || ""}`.trim();
-
+  
       connection = await pool.getConnection();
       await connection.beginTransaction();
-
+  
       // Blog speichern
       const [blogResult] = await connection.query(
         `INSERT INTO blogs (titel, inhalt, autor, erstellt_am) VALUES (?, ?, ?, NOW())`,
         [titel, inhalt, autor]
       );
-
+  
       const blogId = blogResult.insertId;
-
+  
       // Bilder speichern (falls vorhanden)
       if (Array.isArray(bilder) && bilder.length > 0) {
         const bildWerte = [];
-
+  
         for (const bild of bilder) {
-          const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-          if (!matches || matches.length !== 3) {
-            return res.status(400).json({ error: "Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix." });
+          try {
+            const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+            if (!matches || matches.length !== 3) {
+              console.warn("Ungültiges Bildformat, wird übersprungen:", bild);
+              continue; // fehlerhaftes Bild überspringen
+            }
+  
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            const buffer = Buffer.from(base64Data, "base64");
+  
+            if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
+              console.warn("Nicht erlaubter Bildtyp, wird übersprungen:", mimeType);
+              continue; // Bildtyp nicht erlaubt, überspringen
+            }
+  
+            const convertedBuffer = await sharp(buffer).png().toBuffer();
+            const base64Bild = convertedBuffer.toString("base64");
+            bildWerte.push([blogId, base64Bild]);
+          } catch (err) {
+            console.warn("Bild konnte nicht konvertiert werden, wird übersprungen:", err.message);
+            continue;
           }
-
-          const mimeType = matches[1];
-          const base64Data = matches[2];
-          const buffer = Buffer.from(base64Data, "base64");
-
-          if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
-            return res.status(400).json({ error: "Nur PNG, JPEG, JPG oder WEBP erlaubt." });
-          }
-
-          const convertedBuffer = await sharp(buffer).png().toBuffer();
-          const base64Bild = convertedBuffer.toString("base64");
-          bildWerte.push([blogId, base64Bild]);
         }
-
+  
         if (bildWerte.length > 0) {
           await connection.query(
             `INSERT INTO blog_bilder (blog_id, bild) VALUES ?`,
@@ -77,7 +84,7 @@ const blogController = {
           );
         }
       }
-
+  
       await connection.commit();
       res.status(201).json({ message: "Blog erfolgreich erstellt." });
     } catch (error) {
@@ -91,7 +98,7 @@ const blogController = {
       if (connection) connection.release();
     }
   },
-
+  
   getBlogs: async (req, res) => {
     try {
       const [rows] = await pool.query(`
