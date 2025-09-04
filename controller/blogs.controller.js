@@ -49,44 +49,53 @@ const blogController = {
   
       // Bilder speichern (falls vorhanden)
       if (Array.isArray(bilder) && bilder.length > 0) {
-        const bildWerte = [];
   
         for (const bild of bilder) {
           try {
             const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
             if (!matches || matches.length !== 3) {
-              console.warn("Ungültiges Bildformat, wird übersprungen:", bild);
-              continue; // fehlerhaftes Bild überspringen
+              console.warn("Ungültiges Bildformat, wird übersprungen.");
+              continue;
             }
   
             const mimeType = matches[1];
             const base64Data = matches[2];
-            const buffer = Buffer.from(base64Data, "base64");
+            let buffer = Buffer.from(base64Data, "base64");
   
             if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
               console.warn("Nicht erlaubter Bildtyp, wird übersprungen:", mimeType);
-              continue; // Bildtyp nicht erlaubt, überspringen
+              continue;
             }
   
-            const convertedBuffer = await sharp(buffer).png().toBuffer();
-            const base64Bild = convertedBuffer.toString("base64");
-            bildWerte.push([blogId, base64Bild]);
+            // Optional verkleinern, wenn zu groß (> 2MB)
+            if (buffer.length > 2 * 1024 * 1024) {
+              buffer = await sharp(buffer)
+                .resize({ width: 1024 }) // max. Breite 1024px
+                .png({ compressionLevel: 9 })
+                .toBuffer();
+              console.log("Bild wurde verkleinert, da zu groß.");
+            } else {
+              buffer = await sharp(buffer).png().toBuffer(); // nur Konvertieren in PNG
+            }
+  
+            const base64Bild = buffer.toString("base64");
+  
+            // Einzelnes Bild einfügen
+            await connection.query(
+              `INSERT INTO blog_bilder (blog_id, bild) VALUES (?, ?)`,
+              [blogId, base64Bild]
+            );
+  
           } catch (err) {
             console.warn("Bild konnte nicht konvertiert werden, wird übersprungen:", err.message);
             continue;
           }
         }
-  
-        if (bildWerte.length > 0) {
-          await connection.query(
-            `INSERT INTO blog_bilder (blog_id, bild) VALUES ?`,
-            [bildWerte]
-          );
-        }
       }
   
       await connection.commit();
       res.status(201).json({ message: "Blog erfolgreich erstellt." });
+  
     } catch (error) {
       if (connection) {
         try { await connection.rollback(); } catch {}
@@ -98,6 +107,7 @@ const blogController = {
       if (connection) connection.release();
     }
   },
+  
   
   getBlogs: async (req, res) => {
     try {
