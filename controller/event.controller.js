@@ -14,45 +14,39 @@ const eventController = {
       next();
     });
   },
+
   createEvent: async (req, res) => {
     let connection;
     try {
-      const { userTypes } = req.user;
-      if (!userTypes || !userTypes.includes("vorstand")) {
-        return res.status(403).json({ error: "Nur Vorstände dürfen Events erstellen." });
+      // Nur Vorstände dürfen Events erstellen
+      if (
+        !req.user.userTypes ||
+        !Array.isArray(req.user.userTypes) ||
+        !req.user.userTypes.includes("vorstand")
+      ) {
+        return res.status(403).json({ error: "Nur Benutzer mit Vorstandrechten dürfen ein Event erstellen." });
       }
   
-      connection = await pool.getConnection();
-      const { titel, beschreibung, ort, von, bis, alle, supporter, bildtitel, preise, bild } = req.body;
+      const {
+        titel,
+        beschreibung,
+        ort,
+        von,
+        bis,
+        alle,
+        supporter,
+        bildtitel,
+        preise,
+        bild // Erwartet als vollständiger Base64-String mit Präfix
+      } = req.body;
   
       if (!titel || !beschreibung || !ort || !von || !bis) {
-        connection.release();
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
   
-      let fotoBase64 = null;
-  
-      // Hilfsfunktion: Bild solange verkleinern bis es passt
-      async function shrinkImage(buffer) {
-        let sizeLimit = 900 * 1024; // 900 KB Limit (kannst du anpassen)
-        let width = 1000; // Startbreite, wird immer kleiner
-  
-        while (true) {
-          const resizedBuffer = await sharp(buffer).resize({ width, withoutEnlargement: true }).png().toBuffer();
-          if (resizedBuffer.length <= sizeLimit || width <= 50) {
-            return resizedBuffer.toString("base64");
-          }
-          width = Math.floor(width * 0.8); // Schrittweise kleiner machen
-        }
-      }
-  
-      // 1) Wenn ein Bild via FormData (req.file) hochgeladen wurde
-      if (req.file && req.file.buffer) {
-        fotoBase64 = await shrinkImage(req.file.buffer);
-      }
-  
-      // 2) Wenn ein Bild als Base64 im Body kommt
-      else if (bild) {
+      // Falls Bild mitgeliefert wird, prüfe das Format und wandle es in PNG um
+      let base64Bild = null;
+      if (bild) {
         const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
           return res.status(400).json({ error: "Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix." });
@@ -62,19 +56,23 @@ const eventController = {
         const base64Data = matches[2];
         const buffer = Buffer.from(base64Data, "base64");
   
+        // Nur bestimmte Formate zulassen
         if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
           return res.status(400).json({ error: "Nur PNG, JPEG, JPG oder WEBP erlaubt." });
         }
   
-        fotoBase64 = await shrinkImage(buffer);
+        const convertedBuffer = await sharp(buffer).png().toBuffer();
+        base64Bild = convertedBuffer.toString("base64"); // Reines Base64 ohne Prefix
       }
   
+      connection = await pool.getConnection();
       await connection.beginTransaction();
   
+      // Event speichern
       const [eventResult] = await connection.query(
         `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titel, beschreibung, ort, von, bis, fotoBase64, bildtitel || null, supporter || null, alle ? 1 : 0]
+        [titel, beschreibung, ort, von, bis, base64Bild, bildtitel || null, supporter || null, alle ? 1 : 0]
       );
   
       const eventId = eventResult.insertId;
@@ -106,7 +104,6 @@ const eventController = {
       if (connection) connection.release();
     }
   },
-  
   
   getEvents: async (req, res) => {
     try {

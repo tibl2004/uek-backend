@@ -22,96 +22,103 @@ const vorstandController = {
     });
   },
 
-  createEvent: async (req, res) => {
-    let connection;
+  createVorstand: async (req, res) => {
     try {
-      // Nur Vorstände dürfen Events erstellen
+      // Nur Admins, die auch im Vorstand sind, dürfen neue Vorstandsmitglieder erstellen
       if (
         !req.user.userTypes ||
         !Array.isArray(req.user.userTypes) ||
-        !req.user.userTypes.includes("vorstand")
+        !req.user.userTypes.includes('admin') ||
+        !req.user.userTypes.includes('vorstand')
       ) {
-        return res.status(403).json({ error: "Nur Benutzer mit Vorstandrechten dürfen ein Event erstellen." });
+        return res.status(403).json({ error: 'Nur Benutzer mit Admin- und Vorstandrechten dürfen einen Vorstand erstellen.' });
       }
-  
+
+
       const {
-        titel,
-        beschreibung,
+        geschlecht,
+        vorname,
+        nachname,
+        adresse,
+        plz,
         ort,
-        von,
-        bis,
-        alle,
-        supporter,
-        bildtitel,
-        preise,
-        bild // Erwartet als vollständiger Base64-String mit Präfix
+        benutzername,
+        passwort,
+        telefon,
+        email,
+        foto, // Erwartet als vollständiger Base64-String mit Präfix
+        beschreibung,
+        rolle
       } = req.body;
-  
-      if (!titel || !beschreibung || !ort || !von || !bis) {
-        return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
+
+      if (
+        !geschlecht || !vorname || !nachname || !adresse || !plz || !ort ||
+        !benutzername || !passwort || !telefon || !email || !rolle
+      ) {
+        return res.status(400).json({ error: "Alle Pflichtfelder inklusive Rolle müssen ausgefüllt sein." });
       }
-  
-      // Falls Bild mitgeliefert wird, prüfe das Format und wandle es in PNG um
-      let base64Bild = null;
-      if (bild) {
-        const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+
+      // Falls Foto mitgeliefert wird, prüfe das Format und wandle es in PNG um
+      let base64Foto = null;
+      if (foto) {
+        const matches = foto.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
-          return res.status(400).json({ error: "Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix." });
+          return res.status(400).json({ error: 'Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix.' });
         }
-  
+
         const mimeType = matches[1];
         const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, "base64");
-  
-        // Nur bestimmte Formate zulassen
-        if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
-          return res.status(400).json({ error: "Nur PNG, JPEG, JPG oder WEBP erlaubt." });
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        // Optional: nur bestimmte Formate zulassen
+        if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
+          return res.status(400).json({ error: 'Nur PNG, JPEG, JPG oder WEBP erlaubt.' });
         }
-  
-        const convertedBuffer = await sharp(buffer).png().toBuffer();
-        base64Bild = convertedBuffer.toString("base64"); // Reines Base64 ohne Prefix
+
+        const convertedBuffer = await sharp(buffer).resize(400).png().toBuffer();
+        base64Foto = convertedBuffer.toString('base64'); // Reines Base64 ohne Prefix
       }
-  
-      connection = await pool.getConnection();
-      await connection.beginTransaction();
-  
-      // Event speichern
-      const [eventResult] = await connection.query(
-        `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titel, beschreibung, ort, von, bis, base64Bild, bildtitel || null, supporter || null, alle ? 1 : 0]
+
+      // Benutzername darf nicht doppelt vorkommen
+      const [existingUser] = await pool.query(
+        'SELECT id FROM vorstand WHERE benutzername = ?',
+        [benutzername]
       );
-  
-      const eventId = eventResult.insertId;
-  
-      // Preise hinzufügen
-      if (Array.isArray(preise) && preise.length > 0) {
-        const preisWerte = preise
-          .filter(p => p.preisbeschreibung && p.kosten != null)
-          .map(p => [eventId, p.preisbeschreibung, p.kosten]);
-  
-        if (preisWerte.length > 0) {
-          await connection.query(
-            `INSERT INTO event_preise (event_id, preisbeschreibung, kosten) VALUES ?`,
-            [preisWerte]
-          );
-        }
+      if (existingUser.length > 0) {
+        return res.status(409).json({ error: 'Benutzername bereits vergeben.' });
       }
-  
-      await connection.commit();
-      res.status(201).json({ message: "Event erfolgreich erstellt." });
+
+      // Passwort verschlüsseln
+      const hashedPassword = await bcrypt.hash(passwort, 10);
+
+      // In DB speichern
+      await pool.query(
+        `INSERT INTO vorstand 
+          (geschlecht, vorname, nachname, adresse, plz, ort, benutzername, passwort, telefon, email, foto, beschreibung, rolle)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          geschlecht,
+          vorname,
+          nachname,
+          adresse,
+          plz,
+          ort,
+          benutzername,
+          hashedPassword,
+          telefon,
+          email,
+          base64Foto,
+          beschreibung || null,
+          rolle
+        ]
+      );
+
+      res.status(201).json({ message: 'Vorstand erfolgreich erstellt.' });
     } catch (error) {
-      if (connection) {
-        try { await connection.rollback(); } catch {}
-        connection.release();
-      }
-      console.error("Fehler beim Erstellen des Events:", error);
-      res.status(500).json({ error: "Fehler beim Erstellen des Events." });
-    } finally {
-      if (connection) connection.release();
+      console.error('Fehler beim Erstellen des Vorstands:', error);
+      res.status(500).json({ error: 'Fehler beim Erstellen des Vorstands.' });
     }
   },
-  
 
 
   getVorstand: async (req, res) => {
