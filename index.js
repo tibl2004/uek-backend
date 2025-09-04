@@ -13,8 +13,8 @@ const wss = new WebSocket.Server({ server });
 app.use(cors());
 
 // Limits hochsetzen, damit große Base64-Bilder durchgehen
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "150mb", extended: true }));
+app.use(express.json({ limit: "150mb" }));
 
 const linksRouter = require('./routes/links.router');
 const adminRouter = require('./routes/admin.router');
