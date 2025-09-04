@@ -14,7 +14,6 @@ const eventController = {
       next();
     });
   },
-
   createEvent: async (req, res) => {
     let connection;
     try {
@@ -33,10 +32,23 @@ const eventController = {
   
       let fotoBase64 = null;
   
+      // Hilfsfunktion: Bild solange verkleinern bis es passt
+      async function shrinkImage(buffer) {
+        let sizeLimit = 900 * 1024; // 900 KB Limit (kannst du anpassen)
+        let width = 1000; // Startbreite, wird immer kleiner
+  
+        while (true) {
+          const resizedBuffer = await sharp(buffer).resize({ width, withoutEnlargement: true }).png().toBuffer();
+          if (resizedBuffer.length <= sizeLimit || width <= 50) {
+            return resizedBuffer.toString("base64");
+          }
+          width = Math.floor(width * 0.8); // Schrittweise kleiner machen
+        }
+      }
+  
       // 1) Wenn ein Bild via FormData (req.file) hochgeladen wurde
       if (req.file && req.file.buffer) {
-        const pngBuffer = await sharp(req.file.buffer).resize(400).png().toBuffer();
-        fotoBase64 = pngBuffer.toString("base64"); // Nur reiner Base64 String
+        fotoBase64 = await shrinkImage(req.file.buffer);
       }
   
       // 2) Wenn ein Bild als Base64 im Body kommt
@@ -50,13 +62,11 @@ const eventController = {
         const base64Data = matches[2];
         const buffer = Buffer.from(base64Data, "base64");
   
-        // Nur bestimmte Formate erlauben
         if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
           return res.status(400).json({ error: "Nur PNG, JPEG, JPG oder WEBP erlaubt." });
         }
   
-        const convertedBuffer = await sharp(buffer).resize(400).png().toBuffer();
-        fotoBase64 = convertedBuffer.toString("base64");
+        fotoBase64 = await shrinkImage(buffer);
       }
   
       await connection.beginTransaction();
@@ -96,6 +106,7 @@ const eventController = {
       if (connection) connection.release();
     }
   },
+  
   
   getEvents: async (req, res) => {
     try {
