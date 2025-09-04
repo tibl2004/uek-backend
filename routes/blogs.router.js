@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const blogController = require("../controller/blog.controller");
+const blogController = require("../controller/blogs.controller");
 
 // Token-Authentifizierung Middleware
 const authenticate = blogController.authenticateToken;
