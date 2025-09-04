@@ -15,7 +15,6 @@ const eventController = {
     });
   },
 
-
   createEvent: async (req, res) => {
     let connection;
     try {
@@ -23,50 +22,59 @@ const eventController = {
       if (!userTypes || !userTypes.includes("vorstand")) {
         return res.status(403).json({ error: "Nur Vorstände dürfen Events erstellen." });
       }
-
+  
       connection = await pool.getConnection();
       const { titel, beschreibung, ort, von, bis, alle, supporter, bildtitel, preise, bild } = req.body;
-
+  
       if (!titel || !beschreibung || !ort || !von || !bis) {
         connection.release();
         return res.status(400).json({ error: "Titel, Beschreibung, Ort, Von und Bis müssen angegeben werden." });
       }
-
-      let base64Foto = null;
-      if (bild) {
+  
+      let fotoBase64 = null;
+  
+      // 1) Wenn ein Bild via FormData (req.file) hochgeladen wurde
+      if (req.file && req.file.buffer) {
+        const pngBuffer = await sharp(req.file.buffer).resize(400).png().toBuffer();
+        fotoBase64 = pngBuffer.toString("base64"); // Nur reiner Base64 String
+      }
+  
+      // 2) Wenn ein Bild als Base64 im Body kommt
+      else if (bild) {
         const matches = bild.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
-          return res.status(400).json({ error: 'Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix.' });
+          return res.status(400).json({ error: "Ungültiges Bildformat. Erwarte Base64-String mit data:image/... Prefix." });
         }
-
+  
         const mimeType = matches[1];
         const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        // Optional: nur bestimmte Formate zulassen
-        if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(mimeType)) {
-          return res.status(400).json({ error: 'Nur PNG, JPEG, JPG oder WEBP erlaubt.' });
+        const buffer = Buffer.from(base64Data, "base64");
+  
+        // Nur bestimmte Formate erlauben
+        if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
+          return res.status(400).json({ error: "Nur PNG, JPEG, JPG oder WEBP erlaubt." });
         }
-
+  
         const convertedBuffer = await sharp(buffer).resize(400).png().toBuffer();
-        base64Foto = convertedBuffer.toString('base64'); // Reines Base64 ohne Prefix
+        fotoBase64 = convertedBuffer.toString("base64");
       }
-
+  
       await connection.beginTransaction();
-
+  
       const [eventResult] = await connection.query(
         `INSERT INTO events (titel, beschreibung, ort, von, bis, bild, bildtitel, supporter, alle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [titel, beschreibung, ort, von, bis, bildBase64, bildtitel || null, supporter || null, alle ? 1 : 0]
+        [titel, beschreibung, ort, von, bis, fotoBase64, bildtitel || null, supporter || null, alle ? 1 : 0]
       );
-
+  
       const eventId = eventResult.insertId;
-
+  
+      // Preise hinzufügen
       if (Array.isArray(preise) && preise.length > 0) {
         const preisWerte = preise
           .filter(p => p.preisbeschreibung && p.kosten != null)
           .map(p => [eventId, p.preisbeschreibung, p.kosten]);
-
+  
         if (preisWerte.length > 0) {
           await connection.query(
             `INSERT INTO event_preise (event_id, preisbeschreibung, kosten) VALUES ?`,
@@ -74,7 +82,7 @@ const eventController = {
           );
         }
       }
-
+  
       await connection.commit();
       res.status(201).json({ message: "Event erfolgreich erstellt." });
     } catch (error) {
