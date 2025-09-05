@@ -26,6 +26,11 @@ const blogController = {
       ) {
         return res.status(403).json({ error: "Nur Benutzer mit Vorstandrechten dürfen einen Blog erstellen." });
       }
+
+      if (Array.isArray(bilder) && bilder.length > 5) {
+        return res.status(400).json({ error: "Maximal 5 Bilder pro Blog erlaubt." });
+      }
+      
   
       const { titel, inhalt, bilder } = req.body;
   
