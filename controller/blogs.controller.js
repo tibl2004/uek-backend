@@ -116,8 +116,9 @@ const blogController = {
   
   getBlogs: async (req, res) => {
     try {
+      // Alle Blogs inkl. Inhalt und Bilder abrufen
       const [rows] = await pool.query(`
-        SELECT b.id, b.titel, b.erstellt_am,
+        SELECT b.id, b.titel, b.inhalt, b.erstellt_am,
                i.id AS bild_id, i.bild
         FROM blogs b
         LEFT JOIN blog_bilder i ON b.id = i.blog_id
@@ -132,6 +133,7 @@ const blogController = {
           grouped[row.id] = {
             id: row.id,
             titel: row.titel,
+            inhalt: row.inhalt,  // WICHTIG: Inhalt speichern
             erstellt_am: row.erstellt_am,
             bilder: []
           };
@@ -146,13 +148,14 @@ const blogController = {
         if (blog.bilder.length > 0) {
           // Zufall basierend auf Blog-ID + Tag
           const today = new Date();
-          const seed = blog.id + today.getFullYear() + (today.getMonth()+1) + today.getDate();
+          const seed = blog.id + today.getFullYear() + (today.getMonth() + 1) + today.getDate();
           const index = seed % blog.bilder.length;
           selectedBild = `data:image/png;base64,${blog.bilder[index]}`;
         }
         return {
           id: blog.id,
           titel: blog.titel,
+          inhalt: blog.inhalt,   // <- HIER INHALT FÜR VORSCHAU
           erstellt_am: blog.erstellt_am,
           bild: selectedBild
         };
@@ -165,6 +168,7 @@ const blogController = {
       res.status(500).json({ error: "Fehler beim Abrufen der Blogs." });
     }
   },
+  
   
   getBlogById: async (req, res) => {
     try {
