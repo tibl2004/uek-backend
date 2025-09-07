@@ -116,53 +116,30 @@ const blogController = {
   
   getBlogs: async (req, res) => {
     try {
-      // Alle Blogs inkl. Inhalt und Bilder abrufen
       const [rows] = await pool.query(`
-        SELECT b.id, b.titel, b.inhalt, b.erstellt_am,
-               i.id AS bild_id, i.bild
+        SELECT b.id, b.titel, LEFT(b.inhalt, 300) AS inhalt, b.erstellt_am,
+               (
+                 SELECT i.bild 
+                 FROM blog_bilder i 
+                 WHERE i.blog_id = b.id 
+                 ORDER BY (TO_DAYS(NOW()) + i.id) % (SELECT COUNT(*) FROM blog_bilder WHERE blog_id = b.id)
+                 LIMIT 1
+               ) AS preview_bild
         FROM blogs b
-        LEFT JOIN blog_bilder i ON b.id = i.blog_id
         ORDER BY b.erstellt_am DESC
       `);
   
-      const grouped = {};
-  
-      // Gruppieren nach Blog-ID
-      for (const row of rows) {
-        if (!grouped[row.id]) {
-          grouped[row.id] = {
-            id: row.id,
-            titel: row.titel,
-            inhalt: row.inhalt,  // WICHTIG: Inhalt speichern
-            erstellt_am: row.erstellt_am,
-            bilder: []
-          };
-        }
-        if (row.bild_id) {
-          grouped[row.id].bilder.push(row.bild);
-        }
-      }
-  
-      const result = Object.values(grouped).map(blog => {
-        let selectedBild = null;
-        if (blog.bilder.length > 0) {
-          // Zufall basierend auf Blog-ID + Tag
-          const today = new Date();
-          const seed = blog.id + today.getFullYear() + (today.getMonth() + 1) + today.getDate();
-          const index = seed % blog.bilder.length;
-          selectedBild = `data:image/png;base64,${blog.bilder[index]}`;
-        }
-        return {
-          id: blog.id,
-          titel: blog.titel,
-          inhalt: blog.inhalt,   // <- HIER INHALT FÜR VORSCHAU
-          erstellt_am: blog.erstellt_am,
-          bild: selectedBild
-        };
-      });
+      const result = rows.map(row => ({
+        id: row.id,
+        titel: row.titel,
+        inhalt: row.inhalt,
+        erstellt_am: row.erstellt_am,
+        bild: row.preview_bild 
+          ? `data:image/png;base64,${row.preview_bild.toString("base64")}` 
+          : null
+      }));
   
       res.status(200).json(result);
-  
     } catch (error) {
       console.error("Fehler beim Abrufen der Blogs:", error);
       res.status(500).json({ error: "Fehler beim Abrufen der Blogs." });
@@ -173,43 +150,34 @@ const blogController = {
   getBlogById: async (req, res) => {
     try {
       const blogId = req.params.id;
-
-      const [rows] = await pool.query(`
-        SELECT b.id, b.titel, b.inhalt, b.autor, b.erstellt_am,
-               i.id AS bild_id, i.bild
-        FROM blogs b
-        LEFT JOIN blog_bilder i ON b.id = i.blog_id
-        WHERE b.id = ?
-      `, [blogId]);
-
-      if (rows.length === 0) {
+  
+      const [blogRows] = await pool.query(
+        `SELECT id, titel, inhalt, autor, erstellt_am FROM blogs WHERE id = ?`,
+        [blogId]
+      );
+  
+      if (blogRows.length === 0) {
         return res.status(404).json({ error: "Blog nicht gefunden." });
       }
-
-      const blog = {
-        id: rows[0].id,
-        titel: rows[0].titel,
-        inhalt: rows[0].inhalt,
-        autor: rows[0].autor,
-        erstellt_am: rows[0].erstellt_am,
-        bilder: []
-      };
-
-      for (const row of rows) {
-        if (row.bild_id) {
-          blog.bilder.push({
-            id: row.bild_id,
-            bild: `data:image/png;base64,${row.bild}`
-          });
-        }
-      }
-
+  
+      const blog = blogRows[0];
+  
+      const [bilder] = await pool.query(
+        `SELECT id, bild FROM blog_bilder WHERE blog_id = ?`,
+        [blogId]
+      );
+  
+      blog.bilder = bilder.map(b => ({
+        id: b.id,
+        bild: `data:image/png;base64,${b.bild.toString("base64")}`
+      }));
+  
       res.status(200).json(blog);
     } catch (error) {
       console.error("Fehler beim Abrufen des Blogs:", error);
       res.status(500).json({ error: "Fehler beim Abrufen des Blogs." });
     }
-  },
+  },  
 
   updateBlog: async (req, res) => {
     let connection;
