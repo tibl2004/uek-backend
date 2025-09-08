@@ -21,7 +21,6 @@ const loginRouter = require('./routes/login.router');
 const raumRouter = require('./routes/raum.router');
 const stundenplanRouter = require('./routes/stundenplan.router');
 const uekRouter = require('./routes/uek.router');
-const linksRouter = require('./routes/links.router'); // <-- fehlt in deinem Code
 
 // Router benutzen
 app.use('/api/klasse', klasseRouter);
