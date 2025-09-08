@@ -27,7 +27,7 @@ const loginController = {
         return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich.' });
       }
 
-      // Nur noch Tabelle vorstand prüfen
+      // Nur Tabelle vorstand prüfen
       const [vorstandResult] = await pool.query(
         "SELECT * FROM vorstand WHERE benutzername = ?",
         [benutzername]
@@ -44,11 +44,10 @@ const loginController = {
         return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
       }
 
-      // Immer nur "vorstand" als userType
       const userTypes = ["vorstand"];
       const rolle = user.rolle;
 
-      // ⚡ JWT Payload
+      // JWT Payload
       const tokenPayload = {
         id: user.id,
         benutzername: user.benutzername,
@@ -63,12 +62,37 @@ const loginController = {
         id: user.id,
         benutzername: user.benutzername,
         userTypes,
-        rolle
+        rolle,
+        passwort_geaendert: user.passwort_geaendert // 0 = muss ändern, 1 = schon geändert
       });
 
     } catch (error) {
       console.error('Fehler beim Login:', error);
       res.status(500).json({ error: 'Fehler beim Login.' });
+    }
+  },
+
+  // Erst-Login Passwort ändern
+  changePasswordErstLogin: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { neuesPasswort } = req.body;
+
+      if (!neuesPasswort) {
+        return res.status(400).json({ error: 'Neues Passwort ist erforderlich.' });
+      }
+
+      const hashedPassword = await bcrypt.hash(neuesPasswort, 10);
+
+      await pool.query(
+        "UPDATE vorstand SET passwort = ?, passwort_geaendert = 1 WHERE id = ?",
+        [hashedPassword, userId]
+      );
+
+      res.status(200).json({ message: 'Passwort erfolgreich geändert. Jetzt normal einloggen.' });
+    } catch (error) {
+      console.error('Fehler beim Passwort ändern:', error);
+      res.status(500).json({ error: 'Passwort konnte nicht geändert werden.' });
     }
   }
 };

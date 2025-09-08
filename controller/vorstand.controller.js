@@ -162,6 +162,7 @@ const vorstandController = {
   },
 
 
+
   getMyProfile: async (req, res) => {
     try {
       const { id, benutzername, userType } = req.user;
