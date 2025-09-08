@@ -10,33 +10,46 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// Middlewares
 app.use(cors());
-
-// Limits hochsetzen, damit große Base64-Bilder durchgehen
 app.use(express.urlencoded({ limit: "150mb", extended: true }));
 app.use(express.json({ limit: "150mb" }));
 
-const linksRouter = require('./routes/links.router');
+// Router importieren
+const klasseRouter = require('./routes/klasse.router');
 const loginRouter = require('./routes/login.router');
-const vorstandRouter = require('./routes/vorstand.router');
-const youtubelinkRouter = require('./routes/youtubelink.router');
-const eventRouter = require('./routes/event.router');
-const newsletterRouter = require('./routes/newsletter.router');
-const impressumRouter = require('./routes/impressum.router');
-const homeRouter = require('./routes/home.router');
-const blogsRouter = require('./routes/blogs.router');
+const raumRouter = require('./routes/raum.router');
+const stundenplanRouter = require('./routes/stundenplan.router');
+const uekRouter = require('./routes/uek.router');
+const linksRouter = require('./routes/links.router'); // <-- fehlt in deinem Code
 
-
-app.use('/api/links', linksRouter);
+// Router benutzen
+app.use('/api/klasse', klasseRouter);
 app.use('/api/login', loginRouter);
-app.use('/api/vorstand', vorstandRouter);
-app.use('/api/youtubelink', youtubelinkRouter);
-app.use('/api/event', eventRouter);
-app.use('/api/newsletter', newsletterRouter);
-app.use('/api/impressum', impressumRouter);
-app.use('/api/home', homeRouter);
-app.use('/api/blogs', blogsRouter);
+app.use('/api/raum', raumRouter);
+app.use('/api/stundenplan', stundenplanRouter);
+app.use('/api/uek', uekRouter);
+app.use('/api/links', linksRouter);
 
+// WebSocket-Beispiel
+wss.on('connection', (ws) => {
+    console.log('Neue WebSocket-Verbindung');
+    ws.send(JSON.stringify({ message: 'Willkommen im WebSocket!' }));
+
+    ws.on('message', (message) => {
+        console.log('Empfangen:', message);
+        // Nachricht an alle Clients broadcasten
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(message);
+            }
+        });
+    });
+
+    ws.on('close', () => {
+        console.log('WebSocket-Verbindung geschlossen');
+    });
+});
 
 // Fehlerbehandlung
 app.use((err, req, res, next) => {
