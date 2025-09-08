@@ -182,8 +182,8 @@ const blogController = {
   updateBlog: async (req, res) => {
     let connection;
     try {
-      if (req.user.userType !== "admin") {
-        return res.status(403).json({ error: "Nur Admins dürfen Blogs bearbeiten." });
+      if (req.user.userType !== "vorstand") {
+        return res.status(403).json({ error: "Nur vorstands dürfen Blogs bearbeiten." });
       }
 
       const blogId = req.params.id;
@@ -243,8 +243,8 @@ const blogController = {
 
   deleteBlog: async (req, res) => {
     try {
-      if (req.user.userType !== "admin") {
-        return res.status(403).json({ error: "Nur Admins dürfen Blogs löschen." });
+      if (req.user.userType !== "vorstand") {
+        return res.status(403).json({ error: "Nur vorstands dürfen Blogs löschen." });
       }
 
       const blogId = req.params.id;

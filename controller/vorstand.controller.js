@@ -24,14 +24,14 @@ const vorstandController = {
 
   createVorstand: async (req, res) => {
     try {
-      // Nur Admins, die auch im Vorstand sind, dürfen neue Vorstandsmitglieder erstellen
+      // Nur vorstands, die auch im Vorstand sind, dürfen neue Vorstandsmitglieder erstellen
       if (
         !req.user.userTypes ||
         !Array.isArray(req.user.userTypes) ||
-        !req.user.userTypes.includes('admin') ||
+        !req.user.userTypes.includes('vorstand') ||
         !req.user.userTypes.includes('vorstand')
       ) {
-        return res.status(403).json({ error: 'Nur Benutzer mit Admin- und Vorstandrechten dürfen einen Vorstand erstellen.' });
+        return res.status(403).json({ error: 'Nur Benutzer mit vorstand- und Vorstandrechten dürfen einen Vorstand erstellen.' });
       }
 
 
@@ -166,7 +166,7 @@ const vorstandController = {
     try {
       const { id, benutzername, userType } = req.user;
   
-      // 1. Prüfen, ob der User im Vorstand ist (egal ob admin oder nicht)
+      // 1. Prüfen, ob der User im Vorstand ist (egal ob vorstand oder nicht)
       const [rows] = await pool.query(
         `SELECT id, vorname, nachname, adresse, plz, ort, telefon, email, beschreibung, benutzername, foto 
          FROM vorstand WHERE id = ? OR benutzername = ?`,
@@ -192,15 +192,15 @@ const vorstandController = {
       }
   
       // 2. Kein Vorstandseintrag — trotzdem Profil des Users zurückgeben
-      // Hier ggf. weitere Daten aus anderer Tabelle (z.B. admins, mitarbeiter) holen
-      // Beispiel: Tabelle 'admins' abfragen
-      if (userType === 'admin') {
-        const [adminRows] = await pool.query(
-          `SELECT id, benutzername, email, foto FROM admins WHERE id = ? OR benutzername = ?`,
+      // Hier ggf. weitere Daten aus anderer Tabelle (z.B. vorstands, mitarbeiter) holen
+      // Beispiel: Tabelle 'vorstands' abfragen
+      if (userType === 'vorstand') {
+        const [vorstandRows] = await pool.query(
+          `SELECT id, benutzername, email, foto FROM vorstands WHERE id = ? OR benutzername = ?`,
           [id, benutzername]
         );
-        if (adminRows.length > 0) {
-          const a = adminRows[0];
+        if (vorstandRows.length > 0) {
+          const a = vorstandRows[0];
           return res.status(200).json({
             id: a.id,
             benutzername: a.benutzername,
@@ -211,7 +211,7 @@ const vorstandController = {
         }
       }
   
-      // Wenn kein Eintrag in Vorstand oder admins, dann nur Basisdaten zurückgeben
+      // Wenn kein Eintrag in Vorstand oder vorstands, dann nur Basisdaten zurückgeben
       return res.status(200).json({
         id,
         benutzername,
@@ -282,11 +282,11 @@ const vorstandController = {
     }
   },
 
-  changePasswordByAdmin: async (req, res) => {
+  changePasswordByvorstand: async (req, res) => {
     try {
       const userType = req.user.userType;
-      if (userType !== 'admin') {
-        return res.status(403).json({ error: "Nur Admins dürfen Passwörter ändern." });
+      if (userType !== 'vorstand') {
+        return res.status(403).json({ error: "Nur vorstands dürfen Passwörter ändern." });
       }
 
       const { id, neuesPasswort } = req.body;

@@ -14,10 +14,10 @@ router.get("/", blogController.getBlogs);
 // GET Blog nach ID (mit allen Bildern)
 router.get("/:id", blogController.getBlogById);
 
-// UPDATE Blog (nur Admin)
+// UPDATE Blog (nur vorstand)
 router.put("/:id", authenticate, blogController.updateBlog);
 
-// DELETE Blog (nur Admin)
+// DELETE Blog (nur vorstand)
 router.delete("/:id", authenticate, blogController.deleteBlog);
 
 module.exports = router;

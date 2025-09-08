@@ -196,8 +196,8 @@ const eventController = {
 
   updateEvent: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Admins dürfen Events bearbeiten.' });
+      if (req.user.userType !== 'vorstand') {
+        return res.status(403).json({ error: 'Nur vorstands dürfen Events bearbeiten.' });
       }
 
       const eventId = req.params.id;
@@ -233,8 +233,8 @@ const eventController = {
 
   deleteEvent: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Admins dürfen Events löschen.' });
+      if (req.user.userType !== 'vorstand') {
+        return res.status(403).json({ error: 'Nur vorstands dürfen Events löschen.' });
       }
 
       const eventId = req.params.id;

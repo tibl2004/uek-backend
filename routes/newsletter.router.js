@@ -3,7 +3,7 @@ const router = express.Router();
 const newsletterController = require('../controller/newsletter.controller');
 router.get('/subscribers', newsletterController.authenticateToken, newsletterController.getAllSubscribers);
 
-// Newsletter erstellen (nur Admin, Token erforderlich)
+// Newsletter erstellen (nur vorstand, Token erforderlich)
 router.post('/', newsletterController.authenticateToken, newsletterController.create);
 router.get('/unsubscribe', newsletterController.unsubscribe);
 

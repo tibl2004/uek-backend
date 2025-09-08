@@ -17,7 +17,6 @@ app.use(express.urlencoded({ limit: "150mb", extended: true }));
 app.use(express.json({ limit: "150mb" }));
 
 const linksRouter = require('./routes/links.router');
-const adminRouter = require('./routes/admin.router');
 const loginRouter = require('./routes/login.router');
 const vorstandRouter = require('./routes/vorstand.router');
 const youtubelinkRouter = require('./routes/youtubelink.router');
@@ -29,7 +28,6 @@ const blogsRouter = require('./routes/blogs.router');
 
 
 app.use('/api/links', linksRouter);
-app.use('/api/admin', adminRouter);
 app.use('/api/login', loginRouter);
 app.use('/api/vorstand', vorstandRouter);
 app.use('/api/youtubelink', youtubelinkRouter);

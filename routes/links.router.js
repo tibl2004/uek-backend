@@ -5,16 +5,16 @@ const linksController = require('../controller/links.controller');
 // Alle Inhalte abrufen (kein Auth erforderlich)
 router.get('/', linksController.getAllSectionsWithLinks);
 
-// Neue Section mit Links erstellen (Admin only)
+// Neue Section mit Links erstellen (vorstand only)
 router.post('/', linksController.createSectionWithLinks);
 
-// Bestehende Section mit Links aktualisieren (Admin only)
+// Bestehende Section mit Links aktualisieren (vorstand only)
 router.put('/:id', linksController.authenticateToken, linksController.updateSectionWithLinks);
 
-// Section löschen (Admin only)
+// Section löschen (vorstand only)
 router.delete('/:id', linksController.authenticateToken, linksController.deleteSection);
 
-// Einzelnen Link löschen (Admin only)
+// Einzelnen Link löschen (vorstand only)
 router.delete('/:id', linksController.authenticateToken, linksController.deleteLink);
 
 module.exports = router;

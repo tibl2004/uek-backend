@@ -37,9 +37,9 @@ const newsletterController = {
 
   create: async (req, res) => {
     try {
-      // Nur admin darf erstellen
-      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
-        return res.status(403).json({ error: 'Nur Administratoren dürfen Newsletter erstellen.' });
+      // Nur vorstand darf erstellen
+      if (!req.user.userTypes || !req.user.userTypes.includes('vorstand')) {
+        return res.status(403).json({ error: 'Nur vorstandistratoren dürfen Newsletter erstellen.' });
       }
   
       const { title, sections, send_date } = req.body;
@@ -115,9 +115,9 @@ const newsletterController = {
 
   getAllSubscribers: async (req, res) => {
     try {
-      // Hier prüfe ich userTypes-Array auf admin
-      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
-        return res.status(403).json({ error: 'Nur Admins dürfen Abonnenten einsehen' });
+      // Hier prüfe ich userTypes-Array auf vorstand
+      if (!req.user.userTypes || !req.user.userTypes.includes('vorstand')) {
+        return res.status(403).json({ error: 'Nur vorstands dürfen Abonnenten einsehen' });
       }
 
       const [subscribers] = await pool.query(`
@@ -332,9 +332,9 @@ const newsletterController = {
 
   sendNewsletter: async (req, res) => {
     try {
-      // Nur admin darf versenden
-      if (!req.user.userTypes || !req.user.userTypes.includes('admin')) {
-        return res.status(403).json({ error: 'Nur Administratoren dürfen Newsletter versenden.' });
+      // Nur vorstand darf versenden
+      if (!req.user.userTypes || !req.user.userTypes.includes('vorstand')) {
+        return res.status(403).json({ error: 'Nur vorstandistratoren dürfen Newsletter versenden.' });
       }
 
       const { newsletterId } = req.body;
@@ -385,7 +385,7 @@ const newsletterController = {
   },
   importSubscribers: async (req, res) => {
     try {
-      // Kein Admin-Check mehr, jeder darf importieren
+      // Kein vorstand-Check mehr, jeder darf importieren
   
       const { subscribers } = req.body;
       if (!Array.isArray(subscribers) || subscribers.length === 0) {

@@ -17,14 +17,14 @@ router.post(
   eventController.createEvent
 );
 
-// Event aktualisieren (nur Admins)
+// Event aktualisieren (nur vorstands)
 router.put(
   "/:id",
   eventController.authenticateToken,
   eventController.updateEvent
 );
 
-// Event löschen (nur Admins)
+// Event löschen (nur vorstands)
 router.delete(
   "/:id",
   eventController.authenticateToken,

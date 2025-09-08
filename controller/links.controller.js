@@ -20,7 +20,7 @@ const linksController = {
 
   createSectionWithLinks: async (req, res) => {
     if (userType !== 'vorstand') {
-      return res.status(403).json({ error: "Nur Admins dürfen Passwörter ändern." });
+      return res.status(403).json({ error: "Nur vorstands dürfen Passwörter ändern." });
     }
     try {
   
@@ -71,8 +71,8 @@ const linksController = {
 
   updateSectionWithLinks: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin' && req.user.userType !== 'vorstand') {
-        return res.status(403).json({ error: 'Nur Administratoren oder Vorstände dürfen Inhalte aktualisieren.' });
+      if (req.user.userType !== 'vorstand' && req.user.userType !== 'vorstand') {
+        return res.status(403).json({ error: 'Nur vorstandistratoren oder Vorstände dürfen Inhalte aktualisieren.' });
       }
   
       const sectionId = req.params.id;
@@ -157,8 +157,8 @@ const linksController = {
 
   deleteSection: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Administratoren dürfen Inhalte löschen.' });
+      if (req.user.userType !== 'vorstand') {
+        return res.status(403).json({ error: 'Nur vorstandistratoren dürfen Inhalte löschen.' });
       }
 
       const sectionId = req.params.id;
@@ -180,8 +180,8 @@ const linksController = {
 
   deleteLink: async (req, res) => {
     try {
-      if (req.user.userType !== 'admin') {
-        return res.status(403).json({ error: 'Nur Administratoren dürfen Links löschen.' });
+      if (req.user.userType !== 'vorstand') {
+        return res.status(403).json({ error: 'Nur vorstandistratoren dürfen Links löschen.' });
       }
 
       const linkId = req.params.id;
