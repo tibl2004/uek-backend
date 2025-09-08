@@ -29,7 +29,6 @@ app.use('/api/login', loginRouter);
 app.use('/api/raum', raumRouter);
 app.use('/api/stundenplan', stundenplanRouter);
 app.use('/api/uek', uekRouter);
-app.use('/api/links', linksRouter);
 
 // WebSocket-Beispiel
 wss.on('connection', (ws) => {
