@@ -14,42 +14,45 @@ const loginController = {
       let user = null;
       let rolle = null;
 
-      // === 1. Prüfe Admins ===
-      const [adminResult] = await pool.query(
-        "SELECT * FROM admins WHERE benutzername = ? OR email = ?",
-        [benutzernameOderEmail, benutzernameOderEmail]
-      );
+      // Prüfe, ob Eingabe eine E-Mail ist (einfaches @ check)
+      const isEmail = benutzernameOderEmail.includes("@");
 
-      if (adminResult.length > 0) {
-        user = adminResult[0];
-        rolle = user.rolle || "admin";
-      }
-
-      // === 2. Prüfe Lernende ===
-      if (!user) {
+      if (isEmail) {
+        // Login für Lernende über Email
         const [lernendeResult] = await pool.query(
           "SELECT * FROM lernende WHERE email = ?",
           [benutzernameOderEmail]
         );
 
-        if (lernendeResult.length > 0) {
-          user = lernendeResult[0];
-          rolle = "lernende";
+        if (lernendeResult.length === 0) {
+          return res.status(400).json({ error: "Benutzername oder Passwort falsch." });
         }
+
+        user = lernendeResult[0];
+        rolle = "lernende";
+
+      } else {
+        // Login für Admin über Benutzername
+        const [adminResult] = await pool.query(
+          "SELECT * FROM admins WHERE benutzername = ?",
+          [benutzernameOderEmail]
+        );
+
+        if (adminResult.length === 0) {
+          return res.status(400).json({ error: "Benutzername oder Passwort falsch." });
+        }
+
+        user = adminResult[0];
+        rolle = user.rolle || "admin";
       }
 
-      // === Kein Benutzer gefunden ===
-      if (!user) {
-        return res.status(400).json({ error: "Benutzername oder Passwort falsch." });
-      }
-
-      // === Passwort prüfen ===
+      // Passwort prüfen
       const valid = await bcrypt.compare(passwort, user.passwort);
       if (!valid) {
         return res.status(400).json({ error: "Benutzername oder Passwort falsch." });
       }
 
-      // === Token erstellen ===
+      // Token erstellen
       const tokenPayload = {
         id: user.id,
         benutzername: user.benutzername || `${user.vorname} ${user.nachname}`,
@@ -66,6 +69,7 @@ const loginController = {
         rolle,
         userTypes: [rolle],
       });
+
     } catch (error) {
       console.error("Fehler beim Login:", error);
       res.status(500).json({ error: "Fehler beim Login." });
