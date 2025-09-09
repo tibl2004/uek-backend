@@ -28,7 +28,10 @@ const adminController = {
             [benutzername, hashedPassword],
             (err, result) => {
               if (err) return res.status(500).json({ error: "Fehler beim Erstellen des Admins." });
-              res.status(201).json({ message: "Admin erfolgreich erstellt.", id: result.insertId });
+              res.status(201).json({
+                message: "Admin erfolgreich erstellt.",
+                id: result.insertId
+              });
             }
           );
         }
