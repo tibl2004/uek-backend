@@ -45,6 +45,59 @@ const lernendeController = {
     }
   },
 
+  // Neue Funktion im lernendeController
+getLernendeUeks: (req, res) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Kein Token bereitgestellt." });
+
+  jwt.verify(token, "secretKey", (err, decoded) => {
+    if (err) return res.status(403).json({ error: "Ungültiger Token." });
+    if (decoded.rolle !== "lernende") {
+      return res.status(403).json({ error: "Nur Lernende dürfen ihre ÜKs abrufen." });
+    }
+
+    const lernenderId = decoded.id;
+
+    // Lernender + ÜK abrufen
+    const sql = `
+      SELECT l.id as lernenderId, l.vorname, l.nachname, k.klasse, u.id as uekId, u.titel, u.von, u.bis
+      FROM lernende l
+      LEFT JOIN klasse k ON l.klasse_id = k.id
+      LEFT JOIN ueks u ON l.uek_id = u.id
+      WHERE l.id = ?
+    `;
+
+    pool.query(sql, [lernenderId], (err, rows) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Fehler beim Abrufen der ÜKs." });
+      }
+
+      if (!rows || rows.length === 0) {
+        return res.status(404).json({ error: "Keine ÜKs für diesen Lernenden gefunden." });
+      }
+
+      // Strukturieren der Daten
+      const lernenderInfo = {
+        id: rows[0].lernenderId,
+        vorname: rows[0].vorname,
+        nachname: rows[0].nachname,
+        klasse: rows[0].klasse,
+        ueks: rows.map((r) => ({
+          id: r.uekId,
+          titel: r.titel,
+          von: r.von,
+          bis: r.bis,
+        })),
+      };
+
+      res.status(200).json(lernenderInfo);
+    });
+  });
+},
+
+
   
 
   // Alle Lernenden abrufen (Admin/Vorstand)

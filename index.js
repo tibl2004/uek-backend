@@ -22,6 +22,7 @@ const raumRouter = require('./routes/raum.router');
 const stundenplanRouter = require('./routes/stundenplan.router');
 const uekRouter = require('./routes/uek.router');
 const adminRouter = require('./routes/admin.router');
+const lernendeRouter = require('./routes/lernende.router');
 
 
 // Router benutzen
@@ -31,6 +32,7 @@ app.use('/api/raum', raumRouter);
 app.use('/api/stundenplan', stundenplanRouter);
 app.use('/api/uek', uekRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/lernende', lernendeRouter);
 
 
 // WebSocket-Beispiel
