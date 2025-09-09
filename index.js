@@ -21,6 +21,8 @@ const loginRouter = require('./routes/login.router');
 const raumRouter = require('./routes/raum.router');
 const stundenplanRouter = require('./routes/stundenplan.router');
 const uekRouter = require('./routes/uek.router');
+const adminRouter = require('./routes/admin.router');
+
 
 // Router benutzen
 app.use('/api/klasse', klasseRouter);
@@ -28,6 +30,8 @@ app.use('/api/login', loginRouter);
 app.use('/api/raum', raumRouter);
 app.use('/api/stundenplan', stundenplanRouter);
 app.use('/api/uek', uekRouter);
+app.use('/api/admin', adminRouter);
+
 
 // WebSocket-Beispiel
 wss.on('connection', (ws) => {
