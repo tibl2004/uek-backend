@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const pool = require('../database/index');
 
 const loginController = {
+  // Middleware: Token prüfen
   authenticateToken: (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -19,6 +20,7 @@ const loginController = {
     });
   },
 
+  // Admin Login
   login: async (req, res) => {
     try {
       const { benutzername, passwort } = req.body;
@@ -27,25 +29,25 @@ const loginController = {
         return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich.' });
       }
 
-      // Nur Tabelle vorstand prüfen
-      const [vorstandResult] = await pool.query(
-        "SELECT * FROM vorstand WHERE benutzername = ?",
+      // Prüfe Admin-Tabelle
+      const [adminResult] = await pool.query(
+        "SELECT * FROM admins WHERE benutzername = ?",
         [benutzername]
       );
 
-      if (vorstandResult.length === 0) {
+      if (adminResult.length === 0) {
         return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
       }
 
-      const user = vorstandResult[0];
+      const user = adminResult[0];
       const valid = await bcrypt.compare(passwort, user.passwort);
 
       if (!valid) {
         return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
       }
 
-      const userTypes = ["vorstand"];
-      const rolle = user.rolle;
+      const userTypes = ["admin"];
+      const rolle = user.rolle || "admin"; // falls du später Rollen ergänzen willst
 
       // JWT Payload
       const tokenPayload = {
@@ -62,8 +64,7 @@ const loginController = {
         id: user.id,
         benutzername: user.benutzername,
         userTypes,
-        rolle,
-        passwort_geaendert: user.passwort_geaendert // 0 = muss ändern, 1 = schon geändert
+        rolle
       });
 
     } catch (error) {
@@ -72,29 +73,7 @@ const loginController = {
     }
   },
 
-  // Erst-Login Passwort ändern
-  changePasswordErstLogin: async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const { neuesPasswort } = req.body;
-
-      if (!neuesPasswort) {
-        return res.status(400).json({ error: 'Neues Passwort ist erforderlich.' });
-      }
-
-      const hashedPassword = await bcrypt.hash(neuesPasswort, 10);
-
-      await pool.query(
-        "UPDATE vorstand SET passwort = ?, passwort_geaendert = 1 WHERE id = ?",
-        [hashedPassword, userId]
-      );
-
-      res.status(200).json({ message: 'Passwort erfolgreich geändert. Jetzt normal einloggen.' });
-    } catch (error) {
-      console.error('Fehler beim Passwort ändern:', error);
-      res.status(500).json({ error: 'Passwort konnte nicht geändert werden.' });
-    }
-  }
+  
 };
 
 module.exports = loginController;
