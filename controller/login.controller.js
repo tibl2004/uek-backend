@@ -20,45 +20,43 @@ const loginController = {
     });
   },
 
-  // Admin Login
   login: async (req, res) => {
     try {
-      const { benutzername, passwort } = req.body;
-
-      if (!benutzername || !passwort) {
-        return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich.' });
+      const { benutzernameOderEmail, passwort } = req.body;
+  
+      if (!benutzernameOderEmail || !passwort) {
+        return res.status(400).json({ error: 'Benutzername oder Passwort erforderlich.' });
       }
-
-      // Prüfe Admin-Tabelle
+  
+      // Prüfe Admin-Tabelle nach Benutzername oder Email
       const [adminResult] = await pool.query(
-        "SELECT * FROM admins WHERE benutzername = ?",
-        [benutzername]
+        "SELECT * FROM admins WHERE benutzername = ? OR email = ?",
+        [benutzernameOderEmail, benutzernameOderEmail]
       );
-
+  
       if (adminResult.length === 0) {
         return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
       }
-
+  
       const user = adminResult[0];
       const valid = await bcrypt.compare(passwort, user.passwort);
-
+  
       if (!valid) {
         return res.status(400).json({ error: 'Benutzername oder Passwort falsch.' });
       }
-
+  
       const userTypes = ["admin"];
-      const rolle = user.rolle || "admin"; // falls du später Rollen ergänzen willst
-
-      // JWT Payload
+      const rolle = user.rolle || "admin";
+  
       const tokenPayload = {
         id: user.id,
         benutzername: user.benutzername,
         userTypes,
         rolle
       };
-
+  
       const token = jwt.sign(tokenPayload, 'secretKey', { expiresIn: '240h' });
-
+  
       res.json({
         token,
         id: user.id,
@@ -66,12 +64,13 @@ const loginController = {
         userTypes,
         rolle
       });
-
+  
     } catch (error) {
       console.error('Fehler beim Login:', error);
       res.status(500).json({ error: 'Fehler beim Login.' });
     }
-  },
+  }
+  
 
   
 };
